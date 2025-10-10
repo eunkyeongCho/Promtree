@@ -12,3 +12,5 @@
 | 전해지 | haejiforssafy@gmail.com   | RAG    | <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="30"/> |
 | 조은경 | whdmsrud0838@gmail.com    | Parser | <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="30"/> |
 | 최인혁 | 20180122@vision.hoseo.edu | RAG    | <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="30"/> |
+
+### 프로젝트 명세서
