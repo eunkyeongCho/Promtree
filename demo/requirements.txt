@@ -1,6 +1,9 @@
 asttokens==3.0.0
+cffi==2.0.0
+charset-normalizer==3.4.4
 colorama==0.4.6
 comm==0.2.3
+cryptography==46.0.2
 debugpy==1.8.17
 decorator==5.2.1
 dnspython==2.8.0
@@ -16,12 +19,17 @@ matplotlib-inline==0.1.7
 nest-asyncio==1.6.0
 packaging==25.0
 parso==0.8.5
+pdfminer.six==20250506
+pdfplumber==0.11.7
+pillow==11.3.0
 platformdirs==4.5.0
 prompt_toolkit==3.0.52
 psutil==7.1.0
 pure_eval==0.2.3
+pycparser==2.23
 Pygments==2.19.2
 pymongo==4.15.3
+pypdfium2==4.30.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 pywin32==311
