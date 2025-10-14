@@ -4,7 +4,7 @@
 
 ### 삼성전자 생산기술연구소 연계 프로젝트 (RAG, 챗봇)
 
-## 팀 소개 (Team. 될성부를나무)
+## 팀 소개 (Team. 될성부른나무)
 
 <div style="display: flex; justify-content: center;">
   <table>
