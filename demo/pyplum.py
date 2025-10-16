@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 import os
 
 # 1. Root Object 생성
@@ -44,10 +44,6 @@ def image_preprocessing(image: Dict[str, Any], url: str) -> Dict[str, Any]:
     """
     import pdfplumber
 
-    stream_value = image['stream']
-
-    save_images(stream_value, url)
-
     del image['stream']
     image['url'] = url
 
@@ -60,74 +56,75 @@ def image_preprocessing(image: Dict[str, Any], url: str) -> Dict[str, Any]:
     return image
 
 
-# 3. 이미지 저장
-def save_images(stream_value: Any, url: str):
+# 3-1. 이미지 저장(/XObject 의 경우)
+def save_images_with_xref(doc: Any, img_xref: int, url: str) -> None:
     """
-    Stream 값으로 이미지를 지정한 url에 저장하는 함수
+    xref 값으로 이미지를 지정한 url에 저장하는 함수
 
     Args:
-        stream_value: Stream 값
+        doc: MuPDF 문서 객체
+        img_xref: 이미지 xref 값
         url: 이미지 저장 경로
-    """
-
-    from PIL import Image
-    from io import BytesIO
     
-    img_data = stream_value.get_data()
-    img_info = stream_value.attrs
-    img_width = int(img_info['Width'])
-    img_height = int(img_info['Height'])
-    img_bits = int(img_info['BitsPerComponent'])
-    img_colorspace = str(img_info['ColorSpace']).lstrip('/').upper()
+    Returns:
+        None
+    """
+    import fitz
 
-    # print(img_colorspace)
+    pix = None
 
-    img_filter_raw = img_info.get('Filter')
-    img_filters = (
-        [] if img_filter_raw is None
-        else ([str(x).lstrip('/').strip(" '\"").upper() for x in img_filter_raw]
-            if isinstance(img_filter_raw, (list, tuple))
-            else [str(img_filter_raw).lstrip('/').strip(" '\"").upper()])
-    )
-    has_jpeg_like = any(f in ('DCTDECODE', 'JPXDECODE') for f in img_filters)
+    try:
+        # xref로 Pixmap 생성
+        pix = fitz.Pixmap(doc, img_xref)
 
-    # 이미지 모드 설정
-    if img_colorspace in ('RGB', 'DEVICERGB'):
-        img_mode = 'RGB'
-    elif img_colorspace in ('GRAY', 'DEVICEGRAY'):
-        img_mode = '1' if img_bits == 1 else 'L'
-    elif img_colorspace in ('CMYK', 'DEVICECMYK'):
-        img_mode = 'CMYK'
-    else:
-        img_mode = 'RGB'
-        
-    img_size = (img_width, img_height)
+        # Alpha 포함 또는 CMYK 등 RGB가 아닌 경우 RGB로 변환
+        if (pix.n - (1 if pix.alpha else 0)) >= 4 or pix.alpha:
+            rgb_pix = fitz.Pixmap(fitz.csRGB, pix)
+            pix.close()
+            pix = rgb_pix
 
-    # filter별 이미지 처리
-    if has_jpeg_like:
-        # print("jpeg 이미지 발견\n")
-        try:
-            pil_image = Image.open(BytesIO(img_data))
-            pil_image = pil_image.convert('RGB')
-            pil_image.save(url)
-            
-            # print("이미지 저장 완료\n")
+        pix.save(url)  # 확장자가 .png면 PNG로 저장
 
-        except Exception as e:
-            print(f"이미지 저장 오류: {e}")
+    except Exception as e:
+        print("xref 값에 따른 이미지 저장 오류")
+        print(f"이미지 저장 오류: {e}")
+    finally:
+        if pix is not None:
+            pix = None
 
-    else:
-        # print("그 외 이미지 발견\n")
-        try:
-            pil_image = Image.frombytes(img_mode, img_size, img_data)
-            pil_image = pil_image.convert('RGB')
-            pil_image.save(url)
-            
-            # print("이미지 저장 완료\n")
 
-        except Exception as e:
-            print(f"이미지 저장 오류: {e}")
-            
+# 3-2. 인라인 이미지 저장
+def save_inline_image(doc: Any, page_idx: int, bbox: Tuple[float, float, float, float], url: str, zoom: float = 3.0) -> None:
+    """
+    인라인 이미지를 지정한 url에 저장하는 함수
+
+    Args:
+        doc: MuPDF 문서 객체
+        page_idx: 페이지 번호
+        bbox: 이미지 박스 좌표
+        url: 이미지 저장 경로
+        zoom: 렌더링 해상도(배율. 웹/문서 표시 권장 3.0)
+
+    Returns:
+        None
+    """
+    import fitz
+
+    pix = None
+
+    try:
+        page = doc.load_page(page_idx)
+        clip = fitz.Rect(*bbox)
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix = mat, clip = clip, alpha =False)
+        pix.save(url)
+
+    except Exception as e:
+        print("인라인 이미지 저장 오류")
+        print(f"이미지 저장 오류: {e}")
+    finally:
+        if pix is not None:
+            pix = None
 
 
 # 4. Page Object 생성
@@ -142,8 +139,10 @@ def get_page_objects(pdf_path:str, storage_path:str) -> List[Dict[str, Any]]:
         page_objects: Page Object List
     """
     import pdfplumber
+    import fitz
 
     pdf = pdfplumber.open(pdf_path)
+    mupdf = fitz.open(pdf_path)
 
     file_name = pdf_path.split("\\")[-1]
 
@@ -161,8 +160,23 @@ def get_page_objects(pdf_path:str, storage_path:str) -> List[Dict[str, Any]]:
                 dir_path = f"{storage_path}/{file_name}"
                 os.makedirs(dir_path, exist_ok=True)
                 url = f"{dir_path}/page{page_idx+1}_img{img_idx+1}.png"
+
+                # 이미지 저장을 위해 xref 값 추출
+                stream = image.get("stream")
+                xref = getattr(stream, "objid", None)
+
+                # xref 값에 따른 저장 방식 분기
+                if xref is not None:
+                    save_images_with_xref(mupdf, xref, url) 
+                else:
+                    bbox = (image["x0"], image["y0"], image["x1"], image["y1"])
+                    save_inline_image(mupdf, page_idx, bbox, url)
+                    
+                # 이미지 전처리
                 img_object = image_preprocessing(image, url)
                 img_objects.append(img_object)
+
+        
 
         page_object = {
             "file_name": file_name,
@@ -177,7 +191,9 @@ def get_page_objects(pdf_path:str, storage_path:str) -> List[Dict[str, Any]]:
 
         page_objects.append(page_object)
     
+    
     pdf.close()
+    mupdf.close()
     # print("PDF file closed successfully!!")
     
     return page_objects
@@ -187,7 +203,7 @@ if __name__ == "__main__":
 
     # 단일 파일 테스트
     import os
-    pdf_path = "../gpt-020-3m-sds.pdf"
+    pdf_path = "./pdfs/000000001112_US_EN.pdf"
     storage_path = "storage"
     os.makedirs(storage_path, exist_ok=True)
 
