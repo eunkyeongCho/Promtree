@@ -62,9 +62,12 @@ def save_images_with_xref(doc: Any, img_xref: int, url: str) -> None:
     xref 값으로 이미지를 지정한 url에 저장하는 함수
 
     Args:
-        stream_value: pdf 파일 경로
+        doc: MuPDF 문서 객체
         img_xref: 이미지 xref 값
         url: 이미지 저장 경로
+    
+    Returns:
+        None
     """
     import fitz
 
@@ -96,10 +99,14 @@ def save_inline_image(doc: Any, page_idx: int, bbox: Tuple[float, float, float, 
     인라인 이미지를 지정한 url에 저장하는 함수
 
     Args:
-        pdf_path: PDF 파일 경로
+        doc: MuPDF 문서 객체
         page_idx: 페이지 번호
         bbox: 이미지 박스 좌표
         url: 이미지 저장 경로
+        zoom: 렌더링 해상도(배율. 웹/문서 표시 권장 3.0)
+
+    Returns:
+        None
     """
     import fitz
 
