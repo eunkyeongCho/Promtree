@@ -1,3 +1,7 @@
+### demo ###
+demo/images/
+demo/storage/
+
 ### dotenv ###
 .env
 
