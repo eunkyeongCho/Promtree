@@ -50,6 +50,11 @@ class CoordinateBasedDeParser:
 
         system = platform.system()
 
+        # TTC 서브폰트 인덱스
+        self.ttc_subfont_index = {
+            'Gulim': 0, 'GulimChe': 1, 'Dotum': 2, 'DotumChe': 3,
+        }
+
         # 기본 폰트 정의 (Fallback용 - Helvetica는 한글 미지원하므로 한글 폰트 사용)
         DEFAULT_FONT = 'MalgunGothic-Fallback'
 
@@ -58,15 +63,18 @@ class CoordinateBasedDeParser:
             self.font_mapping = {
                 'DotumChe': {
                     'normal': 'C:/Windows/Fonts/gulim.ttc',
-                    'bold': 'C:/Windows/Fonts/malgunbd.ttf',
                 },
                 'Dotum': {
                     'normal': 'C:/Windows/Fonts/gulim.ttc',
-                    'bold': 'C:/Windows/Fonts/malgunbd.ttf',
+                },
+                'Gulim': {
+                    'normal': 'C:/Windows/Fonts/gulim.ttc',
+                },
+                'GulimChe': {
+                    'normal': 'C:/Windows/Fonts/gulim.ttc',
                 },
                 'Malgun': {
                     'normal': 'C:/Windows/Fonts/malgun.ttf',
-                    'bold': 'C:/Windows/Fonts/malgunbd.ttf',
                 },
             }
             default_font_path = 'C:/Windows/Fonts/malgun.ttf'
@@ -76,15 +84,18 @@ class CoordinateBasedDeParser:
             self.font_mapping = {
                 'DotumChe': {
                     'normal': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
-                    'bold': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
                 },
                 'Dotum': {
                     'normal': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
-                    'bold': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
+                },
+                'Gulim': {
+                    'normal': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
+                },
+                'GulimChe': {
+                    'normal': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
                 },
                 'Malgun': {
                     'normal': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
-                    'bold': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
                 },
             }
             default_font_path = '/System/Library/Fonts/Supplemental/AppleGothic.ttf'
@@ -93,15 +104,18 @@ class CoordinateBasedDeParser:
             self.font_mapping = {
                 'DotumChe': {
                     'normal': '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
-                    'bold': '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
                 },
                 'Dotum': {
                     'normal': '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
-                    'bold': '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
+                },
+                'Gulim': {
+                    'normal': '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
+                },
+                'GulimChe': {
+                    'normal': '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
                 },
                 'Malgun': {
                     'normal': '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
-                    'bold': '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
                 },
             }
             default_font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
@@ -125,11 +139,15 @@ class CoordinateBasedDeParser:
             fontname: Font name from PDF (e.g., "FAAAAH+DotumChe,Bold")
 
         Returns:
-            Registered font name to use with ReportLab
+            Tuple of (registered_font_name, is_bold)
         """
         # Already registered or no fontname
         if not fontname or fontname in self.registered_fonts:
-            return self.registered_fonts.get(fontname, self.default_font)
+            is_bold_check = False
+            if fontname:
+                parts = fontname.split('+')[-1]
+                is_bold_check = 'Bold' in parts or 'bold' in parts
+            return self.registered_fonts.get(fontname, self.default_font), is_bold_check
 
         # Parse DB fontname
         # Example: "FAAAAH+DotumChe,Bold" -> base="DotumChe", is_bold=True
@@ -139,28 +157,38 @@ class CoordinateBasedDeParser:
 
         # Find matching font file from mapping
         font_file = None
+        subfont_idx = None
         for key in self.font_mapping:
             if key in base_font:
-                if is_bold and 'bold' in self.font_mapping[key]:
-                    font_file = self.font_mapping[key]['bold']
-                else:
-                    font_file = self.font_mapping[key]['normal']
+                # 항상 normal 폰트 사용 (볼드는 stroke로 처리)
+                font_file = self.font_mapping[key]['normal']
+                
+                # TTC 서브폰트 인덱스 가져오기 (없으면 None)
+                subfont_idx = self.ttc_subfont_index.get(key)
                 break
 
         # Try to register the font
         if font_file and os.path.exists(font_file):
             try:
-                pdfmetrics.registerFont(TTFont(fontname, font_file))
+                # 서브폰트 인덱스가 있으면 TTC 파일
+                if subfont_idx is not None:
+                    pdfmetrics.registerFont(TTFont(fontname, font_file, subfontIndex=subfont_idx))
+                else:
+                    pdfmetrics.registerFont(TTFont(fontname, font_file))
+                
                 self.registered_fonts[fontname] = fontname
-                return fontname
+                print(f"Font registered: {fontname} (Bold: {is_bold})")
+                return fontname, is_bold
             except Exception as e:
+                print(f"Font registration failed [{fontname}]: {e}")
                 # Registration failed, use default
                 self.registered_fonts[fontname] = self.default_font
-                return self.default_font
+                return self.default_font, is_bold
         else:
             # Font file not found, use default
+            print(f"Font file not found: {fontname} (base: {base_font})")
             self.registered_fonts[fontname] = self.default_font
-            return self.default_font
+            return self.default_font, is_bold
 
     def _convert_y_coordinate(self, y, page_height):
         """
@@ -202,11 +230,13 @@ class CoordinateBasedDeParser:
 
             try:
                 # Set font - use register_font_from_db for better font matching
+                is_bold = False
                 if fontname:
-                    font_to_use = self.register_font_from_db(fontname)
-                    c.setFont(font_to_use, font_size)
+                    font_to_use, is_bold = self.register_font_from_db(fontname)
                 else:
-                    c.setFont(self.default_font, font_size)
+                    font_to_use = self.default_font
+                
+                c.setFont(font_to_use, font_size)
 
                 # Set text fill color (non_stroking_color)
                 if non_stroking_color is not None:
@@ -231,18 +261,41 @@ class CoordinateBasedDeParser:
                     elif isinstance(stroking_color, (int, float)):
                         c.setStrokeGray(stroking_color)
 
-                # Draw text - use y0 directly (both PDF and reportlab use bottom-up coords)
-                try:
-                    c.drawString(x0, y0, text)
-                except Exception as inner_e:
-                    # 렌더링 실패 시 특수문자 대체 시도
-                    # ∙ (U+2219) → · (U+00B7) 또는 • (U+2022)
-                    fallback_text = text.replace('\u2219', '\u00B7').replace('\u2219', '\u2022')
+                # 볼드 처리: 텍스트를 여러 번 그려서 굵게 만들기
+                if is_bold:
+                    # 오프셋 값 (폰트 크기에 비례)
+                    offset = font_size * 0.015  # 폰트 크기의 1.5%
+                    
+                    # 여러 방향으로 약간씩 이동하면서 그리기
+                    offsets = [
+                        (0, 0),           # 중앙
+                        (offset, 0),      # 오른쪽
+                        (-offset, 0),     # 왼쪽
+                        (0, offset),      # 위
+                        (0, -offset),     # 아래
+                    ]
+                    
+                    for dx, dy in offsets:
+                        try:
+                            c.drawString(x0 + dx, y0 + dy, text)
+                        except Exception as inner_e:
+                            # 렌더링 실패 시 특수문자 대체 시도
+                            fallback_text = text.replace('\u2219', '\u00B7').replace('\u2219', '\u2022')
+                            try:
+                                c.drawString(x0 + dx, y0 + dy, fallback_text)
+                            except:
+                                continue
+                else:
+                    # 일반 텍스트는 한 번만 그리기
                     try:
-                        c.drawString(x0, y0, fallback_text)
-                    except:
-                        # 최종 실패 시 건너뛰기
-                        continue
+                        c.drawString(x0, y0, text)
+                    except Exception as inner_e:
+                        # 렌더링 실패 시 특수문자 대체 시도
+                        fallback_text = text.replace('\u2219', '\u00B7').replace('\u2219', '\u2022')
+                        try:
+                            c.drawString(x0, y0, fallback_text)
+                        except:
+                            continue
 
             except Exception as e:
                 # Skip if rendering fails
@@ -364,20 +417,12 @@ class CoordinateBasedDeParser:
             y_bottom = y0
 
             # Try to load image from two sources:
-            # 1. base64 encoded data (from parser.py)
-            # 2. file path (from parsing.py)
+            # 1. file path (from parsing.py)
+            # 2. base64 encoded data (from parser.py)
             pil_image = None
 
-            # Method 1: base64 image_data
-            if 'image_data' in img_data:
-                try:
-                    image_bytes = base64.b64decode(img_data['image_data'])
-                    pil_image = Image.open(io.BytesIO(image_bytes))
-                except Exception as e:
-                    print(f"Warning: Failed to decode base64 image: {e}")
-
-            # Method 2: file path (url)
-            elif 'url' in img_data and img_data['url']:
+            # Method 1: file path (url)
+            if 'url' in img_data and img_data['url']:
                 try:
                     image_path = img_data['url']
                     if os.path.exists(image_path):
@@ -386,6 +431,14 @@ class CoordinateBasedDeParser:
                         print(f"Warning: Image file not found: {image_path}")
                 except Exception as e:
                     print(f"Warning: Failed to load image from {img_data.get('url')}: {e}")
+
+            # Method 2: base64 image_data
+            elif 'image_data' in img_data:
+                try:
+                    image_bytes = base64.b64decode(img_data['image_data'])
+                    pil_image = Image.open(io.BytesIO(image_bytes))
+                except Exception as e:
+                    print(f"Warning: Failed to decode base64 image: {e}")
 
             # Draw image if loaded successfully
             if pil_image:
@@ -481,3 +534,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
