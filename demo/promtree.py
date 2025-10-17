@@ -351,31 +351,34 @@ class PromTree:
                     'error': str(e)
                 })
 
-        # Summary
-        print(f"\n{'='*70}")
-        print(f"SUMMARY")
-        print(f"{'='*70}")
-        print(f"{'File':<30} {'Pages':>8} {'SSIM Score':>12} {'Similarity':>12}")
-        print(f"{'-'*70}")
+        # Summary: format the output as a string, print, and include in return
+
+        summary_lines = []
+        summary_lines.append(f"\n{'='*70}")
+        summary_lines.append(f"SUMMARY")
+        summary_lines.append(f"{'='*70}")
+        summary_lines.append(f"{'File':<30} {'Pages':>8} {'SSIM Score':>12} {'Similarity':>12}")
+        summary_lines.append(f"{'-'*70}")
 
         for r in results:
             if 'error' in r:
-                print(f"{r['file']:<30} {'N/A':>8} {'N/A':>12} {'ERROR':>12}")
+                summary_lines.append(f"{r['file']:<30} {'N/A':>8} {'N/A':>12} {'ERROR':>12}")
             else:
                 score = r['average_score']
                 similarity_pct = score * 100
-                print(f"{r['file']:<30} {r['page_count']:>8} {score:>12.4f} {similarity_pct:>11.2f}%")
+                summary_lines.append(f"{r['file']:<30} {r['page_count']:>8} {score:>12.4f} {similarity_pct:>11.2f}%")
 
-        # Overall average
         valid_results = [r for r in results if 'average_score' in r]
         if valid_results:
             overall_avg = np.mean([r['average_score'] for r in valid_results])
-            print(f"{'-'*70}")
-            print(f"{'Overall Average':<30} {'':<8} {overall_avg:>12.4f} {overall_avg*100:>11.2f}%")
+            summary_lines.append(f"{'-'*70}")
+            summary_lines.append(f"{'Overall Average':<30} {'':<8} {overall_avg:>12.4f} {overall_avg*100:>11.2f}%")
+        summary_lines.append(f"\n{'='*70}\n")
 
-        print(f"\n{'='*70}\n")
+        summary_text = "\n".join(summary_lines)
+        print(summary_text)
 
-        return {'evaluation_results': results}
+        return {'evaluation_results': results, 'summary_text': summary_text}
 
 
     def close(self):
