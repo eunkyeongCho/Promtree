@@ -1,5 +1,6 @@
 ### demo ###
 demo/images/
+demo/storage/
 
 ### dotenv ###
 .env
@@ -175,3 +176,7 @@ $RECYCLE.BIN/
 
 ### Windows shortcuts ###
 *.lnk
+
+### Claude Code ###
+.claude/
+CLAUDE.md
