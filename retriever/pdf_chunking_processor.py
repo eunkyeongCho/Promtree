@@ -24,6 +24,12 @@ db = client['s307_db']
 collection = db['s307_collection']
 chunks_collection = db['chunks']
 
+# 청킹 규칙 상수
+MAX_CHUNK_SIZE = 500      # 최대 청크 크기
+MIN_CHUNK_SIZE = 80       # 최소 청크 크기
+OVERLAP_SIZE = 75         # 오버랩 크기
+WINDOW_SIZE = 100         # 문장 경계 탐색 범위
+
 
 def extract_page_numbers(content: str) -> list:
     """
@@ -341,6 +347,226 @@ def parse_markdown_table(table_lines: list) -> pd.DataFrame:
     return pd.DataFrame(data, columns=headers)
 
 
+def find_sentence_boundary(text: str, target_pos: int, window_size: int = WINDOW_SIZE) -> int:
+    """
+    target_pos 근처에서 가장 가까운 문장 경계를 찾음
+    
+    Args:
+        text: 전체 텍스트
+        target_pos: 목표 위치
+        window_size: 탐색 범위
+        
+    Returns:
+        int: 문장 경계 위치 (찾지 못하면 target_pos)
+    """
+    # 탐색 범위 설정
+    start = max(0, target_pos - window_size)
+    end = min(len(text), target_pos + window_size)
+    search_region = text[start:end]
+    
+    # 문장 종료 기호 찾기 (., ?, !, 。, 줄바꿈)
+    sentence_endings = ['.', '?', '!', '。', '\n']
+    
+    # target_pos에서 가장 가까운 문장 경계 찾기
+    best_pos = target_pos
+    min_distance = float('inf')
+    
+    for ending in sentence_endings:
+        # target_pos 이전에서 찾기
+        pos = search_region.rfind(ending, 0, target_pos - start)
+        if pos != -1:
+            actual_pos = start + pos + 1  # 종료 기호 다음 위치
+            distance = abs(actual_pos - target_pos)
+            if distance < min_distance:
+                min_distance = distance
+                best_pos = actual_pos
+        
+        # target_pos 이후에서 찾기
+        pos = search_region.find(ending, target_pos - start)
+        if pos != -1:
+            actual_pos = start + pos + 1  # 종료 기호 다음 위치
+            distance = abs(actual_pos - target_pos)
+            if distance < min_distance:
+                min_distance = distance
+                best_pos = actual_pos
+    
+    return best_pos
+
+
+def smart_split_with_overlap(text: str, level: int, section_start_in_doc: int = 0) -> list:
+    """
+    같은 섹션 내에서 분할할 때 오버랩 적용
+    (섹션 간 오버랩은 별도로 처리됨)
+    
+    Args:
+        text: 분할할 텍스트
+        level: 섹션 레벨 (1, 2, 3)
+        section_start_in_doc: 문서 내에서 섹션 시작 위치 (오버랩 제한용)
+        
+    Returns:
+        list: 분할된 텍스트 조각들
+    """
+    if len(text) <= MAX_CHUNK_SIZE:
+        return [text]
+    
+    chunks = []
+    current_pos = 0
+    
+    while current_pos < len(text):
+        # 청크 끝 위치 계산
+        chunk_end = min(current_pos + MAX_CHUNK_SIZE, len(text))
+        
+        # 문장 경계로 조정 (마지막 청크가 아닌 경우)
+        if chunk_end < len(text):
+            chunk_end = find_sentence_boundary(text, chunk_end)
+        
+        # 청크 추출
+        chunk_text = text[current_pos:chunk_end].strip()
+        
+        if chunk_text:
+            chunks.append(chunk_text)
+        
+        # 다음 청크 시작 위치 계산
+        if chunk_end >= len(text):
+            break
+        
+        # 모든 레벨에서 같은 섹션 내 분할에는 오버랩 적용
+        overlap_start = max(chunk_end - OVERLAP_SIZE, current_pos)
+        
+        # 문장 경계로 스냅
+        overlap_start = find_sentence_boundary(text, overlap_start)
+        
+        # 섹션 시작보다 앞으로 가지 않도록 제한
+        overlap_start = max(overlap_start, 0)
+        
+        # MIN 길이 보장 체크
+        remaining_text = text[overlap_start:].strip()
+        if len(remaining_text) < MIN_CHUNK_SIZE and len(remaining_text) > 0:
+            # 남은 텍스트가 너무 짧으면 이전 청크에 합치기
+            if chunks:
+                chunks[-1] = text[current_pos:].strip()
+                break
+        
+        current_pos = overlap_start
+    
+    # 꼬리 보정: 마지막 청크가 MIN보다 짧으면 처리
+    if len(chunks) > 1 and len(chunks[-1]) < MIN_CHUNK_SIZE:
+        last_chunk = chunks.pop()
+        
+        # 직전 청크에서 문장 하나 빼서 마지막 청크와 합치기
+        prev_chunk = chunks[-1]
+        
+        # 직전 청크에서 마지막 문장 경계 찾기
+        split_pos = find_sentence_boundary(prev_chunk, len(prev_chunk) - MIN_CHUNK_SIZE)
+        
+        if split_pos > MIN_CHUNK_SIZE:
+            # 직전 청크 분할
+            chunks[-1] = prev_chunk[:split_pos].strip()
+            # 마지막 청크 재구성
+            chunks.append((prev_chunk[split_pos:] + " " + last_chunk).strip())
+        else:
+            # 분할할 수 없으면 그냥 합치기
+            chunks[-1] = (prev_chunk + " " + last_chunk).strip()
+    
+    return chunks
+
+
+def merge_small_chunks(chunks_list: list) -> list:
+    """
+    작은 청크들을 병합 (Level 2/3만, 50자 미만)
+    단, 다음이 Level 1이면 병합 금지
+    
+    Args:
+        chunks_list: 청크 리스트
+        
+    Returns:
+        list: 병합된 청크 리스트
+    """
+    if not chunks_list:
+        return []
+    
+    merged = []
+    i = 0
+    
+    while i < len(chunks_list):
+        chunk = chunks_list[i]
+        content_len = len(chunk['content'])
+        
+        # Level 1은 병합하지 않고 그대로 추가
+        if chunk['level'] == 1:
+            merged.append(chunk)
+            i += 1
+            continue
+        
+        # Level 2/3에서 50자 미만인 경우
+        if content_len < 50:
+            # 다음 청크 확인
+            if i + 1 < len(chunks_list):
+                next_chunk = chunks_list[i + 1]
+                
+                # 다음이 Level 1이면 병합하지 않음
+                if next_chunk['level'] == 1:
+                    merged.append(chunk)
+                    i += 1
+                    continue
+                
+                # 같은 레벨이면 병합
+                if chunk['level'] == next_chunk['level']:
+                    merged_chunk = chunk.copy()
+                    merged_chunk['content'] += '\n\n' + next_chunk['content']
+                    merged_chunk['keywords'].extend(next_chunk['keywords'])
+                    # 페이지 번호 병합
+                    merged_chunk['page_num'] = sorted(list(set(chunk['page_num'] + next_chunk['page_num'])))
+                    merged.append(merged_chunk)
+                    i += 2  # 두 개 처리했으므로 +2
+                    continue
+            
+            # 병합할 수 없으면 그대로 추가
+            merged.append(chunk)
+            i += 1
+        else:
+            # 정상 크기는 그대로 추가
+            merged.append(chunk)
+            i += 1
+    
+    return merged
+
+
+def split_large_chunks(chunks_list: list) -> list:
+    """
+    큰 청크들을 분할 (새로운 규칙 적용)
+    
+    Args:
+        chunks_list: 청크 리스트
+        
+    Returns:
+        list: 분할된 청크 리스트
+    """
+    result = []
+    
+    for chunk in chunks_list:
+        content_len = len(chunk['content'])
+        
+        # MAX_CHUNK_SIZE 이하면 그대로 유지
+        if content_len <= MAX_CHUNK_SIZE:
+            result.append(chunk)
+            continue
+        
+        # 큰 청크는 smart_split_with_overlap로 분할
+        split_texts = smart_split_with_overlap(
+            chunk['content'], 
+            chunk['level']
+        )
+        
+        for idx, split_text in enumerate(split_texts):
+            new_chunk = chunk.copy()
+            new_chunk['content'] = split_text
+            new_chunk['chunk_id'] = f"{chunk['chunk_id']}_split_{idx}"
+            result.append(new_chunk)
+    
+    return result
+
+
 def process_document_final(doc: dict) -> list:
     """
     단일 문서를 처리하여 청크 생성 (섹션/표 기반 페이지 번호)
@@ -351,17 +577,23 @@ def process_document_final(doc: dict) -> list:
     Returns:
         list: 생성된 청크들의 리스트
     """
+    print(f"\n[DEBUG] 문서 처리 시작: {doc['file_name']}")
+    
     # 1. content 정리
     cleaned_content = clean_content(doc['content'])
+    print(f"[DEBUG] content 정리 완료 (길이: {len(cleaned_content)})")
     
     # 2. 섹션과 표 분리
     sections, tables = extract_headings_and_sections(cleaned_content)
+    print(f"[DEBUG] 섹션 {len(sections)}개, 표 {len(tables)}개 추출")
     
     # 3. 텍스트 청크 생성 (섹션별로 페이지 번호 설정)
     text_chunks = []
-    for section in sections:
+    for idx, section in enumerate(sections):
         # 섹션의 페이지 번호 찾기 (최종 개선된 버전 사용)
         section_page_num = get_page_number_for_section_final(section['content'], doc['content'])
+        heading_preview = section['heading'][:30] + '...' if len(section['heading']) > 30 else section['heading']
+        print(f"[DEBUG] 섹션 {idx+1}/{len(sections)}: '{heading_preview}' -> 페이지 {section_page_num}")
         
         # 섹션을 청크로 변환
         content = section['content'].strip()
@@ -396,14 +628,48 @@ def process_document_final(doc: dict) -> list:
         }
         text_chunks.append(chunk)
     
-    # 4. 표 청크 생성 (표별로 페이지 번호 설정)
+    print(f"[DEBUG] 초기 텍스트 청크 생성 완료: {len(text_chunks)}개")
+    
+    # 4. 헤딩 없는 텍스트 처리 (level이 0인 경우)
+    no_heading_chunks = []
+    for chunk in text_chunks:
+        if chunk['level'] == 0:  # 헤딩이 없는 텍스트
+            # MAX_CHUNK_SIZE 단위로 분할 (Level 2 규칙 적용)
+            if len(chunk['content']) > MAX_CHUNK_SIZE:
+                split_texts = smart_split_with_overlap(chunk['content'], level=2)
+                for idx, split_text in enumerate(split_texts):
+                    new_chunk = chunk.copy()
+                    new_chunk['content'] = split_text
+                    new_chunk['chunk_id'] = f"{chunk['chunk_id']}_noheading_{idx}"
+                    no_heading_chunks.append(new_chunk)
+            else:
+                no_heading_chunks.append(chunk)
+        else:
+            no_heading_chunks.append(chunk)
+    
+    text_chunks = no_heading_chunks
+    print(f"[DEBUG] 헤딩 없는 텍스트 처리 완료: {len(text_chunks)}개")
+    
+    # 5. 글자 수 기반 청크 조정
+    # 5-1. 작은 청크 병합 (50자 미만, Level 2/3만, Level 1 다음은 병합 금지)
+    before_merge = len(text_chunks)
+    text_chunks = merge_small_chunks(text_chunks)
+    print(f"[DEBUG] 작은 청크 병합: {before_merge}개 -> {len(text_chunks)}개")
+    
+    # 5-2. 큰 청크 분할 (MAX_CHUNK_SIZE 이상, 새로운 규칙)
+    before_split = len(text_chunks)
+    text_chunks = split_large_chunks(text_chunks)
+    print(f"[DEBUG] 큰 청크 분할: {before_split}개 -> {len(text_chunks)}개")
+    
+    # 6. 표 청크 생성 (표별로 페이지 번호 설정)
     table_chunks = []
-    for table in tables:
+    for idx, table in enumerate(tables):
         # 표의 페이지 번호 찾기
         table_page_num = get_page_number_for_table(table['table_lines'], doc['content'])
         
         table_df = parse_markdown_table(table['table_lines'])
         if table_df is not None:
+            print(f"[DEBUG] 표 {idx+1}/{len(tables)}: {len(table_df)}행 -> 페이지 {table_page_num}")
             # 표의 각 행을 청크로 변환
             for idx, row in table_df.iterrows():
                 row_dict = row.to_dict()
@@ -424,6 +690,7 @@ def process_document_final(doc: dict) -> list:
                 table_chunks.append(chunk)
     
     all_chunks = text_chunks + table_chunks
+    print(f"[DEBUG] 문서 처리 완료: 텍스트 청크 {len(text_chunks)}개 + 표 청크 {len(table_chunks)}개 = 총 {len(all_chunks)}개\n")
     return all_chunks
 
 
@@ -439,14 +706,18 @@ def save_chunks_to_mongodb(chunks: list, batch_id: str = None) -> None:
         None
     """
     if not chunks:
-        print("저장할 청크가 없습니다")
+        print("[DEBUG] 저장할 청크가 없습니다")
         return
     
+    print(f"[DEBUG] MongoDB 저장 시작: {len(chunks)}개 청크")
+    
     # 기존 청크 삭제
-    chunks_collection.delete_many({})
+    deleted_count = chunks_collection.delete_many({}).deleted_count
+    print(f"[DEBUG] 기존 청크 {deleted_count}개 삭제")
     
     # 배치로 저장
     batch_size = 100
+    saved_count = 0
     for i in range(0, len(chunks), batch_size):
         batch = chunks[i:i+batch_size]
         
@@ -457,8 +728,10 @@ def save_chunks_to_mongodb(chunks: list, batch_id: str = None) -> None:
         
         # MongoDB에 저장
         chunks_collection.insert_many(batch)
+        saved_count += len(batch)
+        print(f"[DEBUG] 배치 저장 진행중... ({saved_count}/{len(chunks)})")
     
-    print(f"총 {len(chunks)}개 청크 저장 완료")
+    print(f"[DEBUG] MongoDB 저장 완료: 총 {len(chunks)}개 청크")
 
 
 def search_chunks(query: str = None, chunk_type: str = None, file_name: str = None, 
@@ -503,13 +776,15 @@ def process_all_documents() -> list:
     """
     # processing 타입 문서 조회
     processing_docs_list = list(collection.find({"doc_type": "processing"}))
+    print(f"[DEBUG] 처리할 문서 수: {len(processing_docs_list)}개\n")
     
     all_chunks = []
-    for doc in processing_docs_list:
+    for idx, doc in enumerate(processing_docs_list):
+        print(f"[DEBUG] === 문서 {idx+1}/{len(processing_docs_list)} 처리 중 ===")
         doc_chunks = process_document_final(doc)
         all_chunks.extend(doc_chunks)
     
-    print(f"총 {len(all_chunks)}개 청크 생성 완료")
+    print(f"\n[DEBUG] 전체 처리 완료: 총 {len(all_chunks)}개 청크 생성")
     return all_chunks
 
 
@@ -520,6 +795,8 @@ def get_chunk_statistics() -> dict:
     Returns:
         dict: 청크 통계 정보
     """
+    print("[DEBUG] 통계 정보 수집 중...")
+    
     total_chunks = chunks_collection.count_documents({})
     
     # 청크 타입별 분포
@@ -538,35 +815,28 @@ def get_chunk_statistics() -> dict:
     # 여러 페이지를 가진 청크 수
     multi_page_count = chunks_collection.count_documents({"$expr": {"$gt": [{"$size": "$page_num"}, 1]}})
     
-    return {
+    stats = {
         'total_chunks': total_chunks,
         'chunk_types': list(chunk_types),
         'page_distribution': list(page_distribution),
         'multi_page_chunks': multi_page_count
     }
+    
+    print(f"[DEBUG] 통계 수집 완료: 총 {total_chunks}개 청크")
+    return stats
 
 
 if __name__ == "__main__":
     # 모든 문서 처리 및 저장
+    print("\n" + "="*60)
     print("=== PDF 파싱 데이터 청킹 시작 ===")
+    print("="*60 + "\n")
     
     # 1. 모든 문서 처리
     all_chunks = process_all_documents()
     
     # 2. MongoDB에 저장
+    print("\n" + "="*60)
     save_chunks_to_mongodb(all_chunks, "main_batch")
+    print("="*60 + "\n")
     
-    # 3. 통계 정보 출력
-    # stats = get_chunk_statistics()
-    # print(f"\n=== 처리 완료 ===")
-    # print(f"총 청크 수: {stats['total_chunks']}")
-    # print(f"여러 페이지를 가진 청크 수: {stats['multi_page_chunks']}")
-    
-    # # 4. 사용 예시
-    # print(f"\n=== 사용 예시 ===")
-    # print("# 특정 파일의 모든 청크 검색:")
-    # print("results = search_chunks(file_name='gpt-020-3m-sds.md')")
-    # print("\n# 텍스트 청크만 검색:")
-    # print("results = search_chunks(chunk_type='text')")
-    # print("\n# 특정 키워드 검색:")
-    # print("results = search_chunks(query='물질안전보건자료')")
