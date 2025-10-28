@@ -837,6 +837,6 @@ if __name__ == "__main__":
     
     # 2. MongoDB에 저장
     print("\n" + "="*60)
-    save_chunks_to_mongodb(all_chunks, "main_batch")
+    save_chunks_to_mongodb(all_chunks)
     print("="*60 + "\n")
     
