@@ -4,14 +4,14 @@
 
 ### 삼성전자 생산기술연구소 연계 프로젝트 (RAG, 챗봇)
 
-## 팀 소개 (Team. 될성부른나무)
+## 팀 소개 (Team. PromTree)
 
 <div style="display: flex; justify-content: center;">
   <table>
     <tr>
       <td height="140px" align="center">
         <a href="https://github.com/jeonhaejidev">
-          <img src="" width="140px" height="140px" /><br><br>
+          <img src="images/해지.jpg" width="140px" height="140px" /><br><br>
           전해지 <br>
           (Team-Leader)
         </a>
@@ -19,7 +19,7 @@
       </td>
       <td height="140px" align="center">
         <a href="https://github.com/yang-yang140">
-          <img src="" width="140px" height="140px" /><br><br>
+          <img src="images/현지.png" width="140px" height="140px" /><br><br>
           양현지 <br>
           (ChatBot)
         </a>
@@ -27,7 +27,7 @@
       </td>
       <td height="140px" align="center">
         <a href="https://github.com/Yoo-SeungHyeon">
-          <img src="" width="140px" height="140px" /><br><br>
+          <img src="images/승현.png" width="140px" height="140px" /><br><br>
           유승현 <br>
           (Parser)
         </a>
@@ -35,7 +35,7 @@
       </td>
       <td height="140px" align="center">
         <a href="https://github.com/hitoriudon">
-          <img src="" width="140px" height="140px" /><br><br>
+          <img src="images/석철.png" width="140px" height="140px" /><br><br>
           이석철 <br>
           (Parser)
         </a>
@@ -43,7 +43,7 @@
       </td>
       <td height="140px" align="center">
         <a href="https://github.com/eunkyeongCho">
-          <img src="" width="140px" height="140px" /><br><br>
+          <img src="images/은경.png" width="140px" height="140px" /><br><br>
           조은경 <br>
           (Parser)
         </a>
@@ -51,7 +51,7 @@
       </td>
       <td height="140px" align="center">
         <a href="https://github.com/InHyuk-Choi">
-          <img src="" width="140px" height="140px" /><br><br>
+          <img src="images/인혁.png" width="140px" height="140px" /><br><br>
           최인혁 <br>
           (ChatBot)
         </a>
@@ -151,7 +151,7 @@
 - DB: MongoDB 또는 PostgreSQL
 
 
-## 아키텍쳐
+## 아키텍처
 
 ![](./images/architecture.png)
 
