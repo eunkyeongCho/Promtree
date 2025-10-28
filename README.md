@@ -4,7 +4,7 @@
 
 ### 삼성전자 생산기술연구소 연계 프로젝트 (RAG, 챗봇)
 
-## 팀 소개 (Team.PromTree)
+## 팀 소개 (Team. PromTree)
 
 <div style="display: flex; justify-content: center;">
   <table>
@@ -151,7 +151,7 @@
 - DB: MongoDB 또는 PostgreSQL
 
 
-## 아키텍쳐
+## 아키텍처
 
 ![](./images/architecture.png)
 
