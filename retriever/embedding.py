@@ -33,17 +33,6 @@ collection = db['s307_collection']
 chunks_collection = db['chunks']
 
 
-# result = collection.find_one({"file_name": "44-1206-SDS11757.md", "doc_type": "processing"})
-
-# # result의 content를 testprocessing.md 파일로 저장
-# if result and 'content' in result:
-#     with open('testprocessing.md', 'w', encoding='utf-8') as f:
-#         f.write(result['content'])
-#     print("testprocessing.md 파일이 생성되었습니다.")
-# else:
-#     print("해당 문서를 찾을 수 없거나 content가 없습니다.")
-
-
 def initialize_model() -> SentenceTransformer:
     """
     GPU 사용 가능 시 GPU 모델 로드, 불가능 시 CPU 모델 로드
