@@ -1,7 +1,7 @@
 import os
 from promtree.pdf_to_png import pdf_to_png_high_res
 from promtree.structure import detect_layout
-from promtree.pdf import pdf_to_text
+from promtree.pdf_to_txt import pdf_to_text
 from promtree.order_md import order_and_save_md
 
 target = "44-1206-SDS11757"
