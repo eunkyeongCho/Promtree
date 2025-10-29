@@ -25,6 +25,7 @@ client = MongoClient(url)
 db = client['s307_db']
 chunks_collection = db['chunks']
 
+# RAG 시스템 클래스
 class RAGSystem:
     def __init__(
         self,
@@ -32,9 +33,10 @@ class RAGSystem:
         index: faiss.Index = None,
         llm_model: str = "gemini-2.5-flash"
     ):
+        # 임베딩 모델, 벡터 인덱스, LLM 초기화
         self.model = model if model is not None else initialize_model()
         self.index = index if index is not None else load_faiss_index()
-
+        
         self.llm = ChatGoogleGenerativeAI(
             model=llm_model,
             google_api_key=os.getenv("GOOGLE_API_KEY"),
@@ -42,7 +44,7 @@ class RAGSystem:
             max_output_tokens=500,
         )
 
-        # v1 스타일: ChatPromptTemplate로 메시지 구성
+         # 프롬프트 템플릿 (시스템 규칙 + 사용자 질문)
         self.prompt = ChatPromptTemplate.from_messages([
             ("system",
              "당신은 질문 답변을 도와주는 AI 어시스턴트입니다. "
@@ -58,6 +60,7 @@ class RAGSystem:
    
 
     def search_similar_chunks(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        # 쿼리 임베딩 후 FAISS 검색
         if self.index is None:
             print("FAISS 인덱스가 로드되지 않았습니다.")
             return []
@@ -72,10 +75,11 @@ class RAGSystem:
         results = []
         for i, idx in enumerate(indices[0]):
             if idx < 0: continue
+            # vector_id 기준으로 MongoDB에서 청크 조회
             chunk = chunks_collection.find_one({"vector_id": int(idx)})
             if chunk:
                 d = float(distances[0][i])
-                similarity = max(0.0, 1.0 - (d / 2.0))
+                similarity = max(0.0, 1.0 - (d / 2.0))  # 코사인 유사도 근사
                 results.append({
                     "chunk": chunk,
                     "similarity": similarity,
@@ -84,6 +88,7 @@ class RAGSystem:
         return results
 
     def get_context_from_chunks(self, chunks: List[Dict[str, Any]], max_length: int = 2000) -> str:
+        # 여러 청크를 연결해 LLM에 줄 컨텍스트 문자열 생성
         context_parts = []
         current_len = 0
         for item in chunks:
@@ -96,7 +101,8 @@ class RAGSystem:
             current_len += len(candidate)
         return "\n".join(context_parts)
 
-    def ask_question(self, question: str, top_k: int = 5) -> Dict[str, Any]:
+    def ask_question(self, question: str, top_k: int = 5) -> Dict[str, Any]:\
+         # 질문에 대해 RAG 파이프라인 실행
         chunks = self.search_similar_chunks(question, top_k)
         if not chunks:
             return {
@@ -107,7 +113,7 @@ class RAGSystem:
             }
 
         context = self.get_context_from_chunks(chunks)
-        # 체인 호출: 딕셔너리로 값 주입
+        # 프롬프트 체인 호출 (컨텍스트 + 질문 전달)
         answer = self.chain.invoke({"context": context, "question": question})
 
         sources = [c["chunk"].get("source_file_name", "Unknown") for c in chunks]
@@ -122,6 +128,7 @@ class RAGSystem:
         }
 
     def similarity_search(self, query: str, top_k: int = 5) -> List[Document]:
+        # LangChain Document 형태로 반환하는 유사 검색
         chunks = self.search_similar_chunks(query, top_k)
         docs: List[Document] = []
         for item in chunks:
