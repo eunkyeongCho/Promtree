@@ -30,7 +30,7 @@ url = f"mongodb://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/"
 client = MongoClient(url)
 db = client['s307_db']
 collection = db['s307_collection']
-chunks_collection = db['chunks']
+chunks_collection = db['chunk_collection']
 
 
 # result = collection.find_one({"file_name": "44-1206-SDS11757.md", "doc_type": "processing"})

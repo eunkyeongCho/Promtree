@@ -180,3 +180,6 @@ $RECYCLE.BIN/
 ### Claude Code ###
 .claude/
 CLAUDE.md
+
+### 은경이 코드
+/retriever/embedding.py
