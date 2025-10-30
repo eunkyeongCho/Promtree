@@ -183,3 +183,4 @@ CLAUDE.md
 
 ### 은경이 코드
 /retriever/embedding.py
+/retriever/rag_processor.ipynb
