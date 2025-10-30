@@ -48,12 +48,15 @@ def order_and_save_md(output_txt_path, layout_json_path, save_md_path = None):
             for bbox in element['bboxes']:
                 elem_list = []
                 for text_elem in text_dict.get(page_key, []):
+                    if text_elem[5] == 1:
+                        continue
                     elem_bbox = (text_elem[0], text_elem[1], text_elem[2], text_elem[3])
                     if check_bbox_overlap(bbox['bbox'], elem_bbox):
                         if bbox['label'] == 'SectionHeader':
                             elem_list.append((text_elem[0], text_elem[1], f"## {text_elem[4].strip()}"))
                         else:
                             elem_list.append((text_elem[0], text_elem[1], f"{text_elem[4].strip()}"))
+                        text_elem[5] = 1
                 
                 sorted_elems = sorted(elem_list, key=lambda x: (x[1], x[0]))
                 for _, _, content in sorted_elems:
