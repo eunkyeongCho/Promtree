@@ -6,8 +6,8 @@
 - PostgreSQL 연결 관리 (추출된 물성 데이터 저장소)
 
 환경 변수 (.env):
-    MONGO_USERNAME, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT
-    PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD
+    MONGO_INITDB_ROOT_USERNAME, MONGO_INITDB_ROOT_PASSWORD, MONGO_HOST, MONGO_PORT
+    POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
 
 함수:
     get_mongodb()     → MongoDB Database 객체 (또는 None)
@@ -40,8 +40,8 @@ def get_mongodb():
     try:
         load_dotenv()
 
-        username = os.getenv("MONGO_USERNAME")
-        password = os.getenv("MONGO_PASSWORD")
+        username = os.getenv("MONGO_INITDB_ROOT_USERNAME")
+        password = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
         host = os.getenv("MONGO_HOST", "localhost")
         port = int(os.getenv("MONGO_PORT", "27017"))
 
@@ -74,10 +74,10 @@ def get_postgresql():
         load_dotenv()
 
         conn = psycopg2.connect(
-            host=os.getenv("PG_HOST", "localhost"),
-            database=os.getenv("PG_DATABASE", "tds_db"),
-            user=os.getenv("PG_USER", "postgres"),
-            password=os.getenv("PG_PASSWORD")
+            host=os.getenv("POSTGRES_HOST", "localhost"),
+            database=os.getenv("POSTGRES_DB", "CoreDB"),
+            user=os.getenv("POSTGRES_USER", "promtree"),
+            password=os.getenv("POSTGRES_PASSWORD")
         )
 
         print("✅ PostgreSQL 연결 성공")
@@ -96,10 +96,10 @@ if __name__ == "__main__":
     mongodb = get_mongodb()
     postgres = get_postgresql()
 
-    if mongodb:
+    if mongodb is not None:
         print(f"\n사용 가능한 컬렉션: {mongodb.list_collection_names()}")
 
-    if postgres:
+    if postgres is not None:
         cursor = postgres.cursor()
         cursor.execute("SELECT version();")
         version = cursor.fetchone()

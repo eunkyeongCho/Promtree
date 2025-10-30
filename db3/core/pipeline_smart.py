@@ -306,7 +306,7 @@ if __name__ == "__main__":
         mongodb,
         postgres,
         doc_filter={'document_id': {'$regex': '^MOCK_'}},
-        use_llm_fallback=True  # ← 정규식만 (빠름, 1초)
+        use_llm_fallback=False  # ← 정규식만 (빠름, 1초)
     )
 
     if postgres is not None:

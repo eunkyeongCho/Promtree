@@ -33,15 +33,15 @@ load_dotenv()
 
 # PostgreSQL 연결
 def get_postgres():
-    password = os.getenv('PG_PASSWORD')
+    password = os.getenv('POSTGRES_PASSWORD')
     if not password:
-        raise ValueError("PG_PASSWORD 환경 변수가 설정되지 않았습니다. .env 파일을 확인하세요.")
+        raise ValueError("POSTGRES_PASSWORD 환경 변수가 설정되지 않았습니다. .env 파일을 확인하세요.")
 
     return psycopg2.connect(
-        host=os.getenv('PG_HOST', 'localhost'),
-        port=int(os.getenv('PG_PORT', 5432)),
-        database=os.getenv('PG_DATABASE', 'CoreDB'),
-        user=os.getenv('PG_USER', 'promtree'),
+        host=os.getenv('POSTGRES_HOST', 'localhost'),
+        port=int(os.getenv('POSTGRES_PORT', 5432)),
+        database=os.getenv('POSTGRES_DB', 'CoreDB'),
+        user=os.getenv('POSTGRES_USER', 'promtree'),
         password=password,
         connect_timeout=10
     )
