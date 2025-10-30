@@ -136,4 +136,4 @@ xxhash==3.6.0
 zstandard==0.25.0
 urlextract==1.9.0
 langchain-text-splitters==1.0.0
-langchain_openai==1.0.1
+langchain-openai==1.0.1
