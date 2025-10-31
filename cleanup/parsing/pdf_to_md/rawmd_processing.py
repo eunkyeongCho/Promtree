@@ -185,9 +185,9 @@ def get_header_footer_info(context: str) -> dict:
             'content': header와 footer를 제외한 순수 content 텍스트들
         }
     """
-    # 1. 페이지별로 분할 (>>> page X ~ >>> pend 구조)
-    # >>> page x 와 >>> pend 제외하고 나머지 내용 추출
-    page_pattern = r'>>> page \d+\n(.*?)\n>>> pend'
+    # 1. 페이지별로 분할 (>>> page_X 구조, pend 없음)
+    # >>> page_x 부터 다음 >>> page_x 또는 파일 끝까지 추출
+    page_pattern = r'>>> page_\d+\n(.*?)(?=\n>>> page_\d+|\Z)'
     page_matches = re.findall(page_pattern, context, re.DOTALL)
 
     # 초기화 처리
@@ -302,7 +302,7 @@ if __name__ == "__main__":
 
 
     # t1,t2,t3,t4 폴더의 output.md 파일 처리
-    t1_md_path = r"C:\Users\SSAFY\Desktop\S13P31S307\parsing\testmds\t1\44-1206-SDS11757.md"
+    t1_md_path = r"C:\Users\rick0\OneDrive\Desktop\S307\promtree\tests\44-1206-SDS11757\output.md"
     
     # 1. .md 파일을 MongoDB에 저장
     print("=== 1단계: .md 파일 저장 ===")
