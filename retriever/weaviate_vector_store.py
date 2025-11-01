@@ -20,3 +20,7 @@ class WeaviateVectorStore(BaseVectorStore):
             print("✅ Successfully connected to Weaviate Cloud.")
         else:
             print("❌ Failed to connect to Weaviate Cloud.")
+
+    def add_documents
+
+    def similarity_search
