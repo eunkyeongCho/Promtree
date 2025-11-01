@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List
 from langchain_core.documents import Document
 
 class BaseVectorStore(ABC):
 
     @abstractmethod
-    def add_documents(self, documents: List[Document], embedding_model, *args):
+    def add_documents(self, documents: list[Document], embedding_model, *args):
         pass
 
     @abstractmethod
