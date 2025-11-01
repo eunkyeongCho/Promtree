@@ -339,7 +339,7 @@ def generate_text_chunk(md: str) -> list:
                     texts['start_index'] = line_match.start()
                     texts['end_index'] = line_match.end() - 1
 
-                else: # 기존에 쌓인 text가 있다면 그냥 텍스트만 append
+                else: # 기존에 쌓인 text가 있다면 그냥 텍스트만 이어붙이기
                     texts['content'] = texts['content'] + line
                     texts['end_index'] = line_match.end() - 1
 
