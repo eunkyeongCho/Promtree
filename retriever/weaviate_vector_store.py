@@ -1,33 +1,25 @@
-# 임베딩 모델
-from langchain_openai import OpenAIEmbeddings
+import weaviate
+from base_vector_store import BaseVectorStore
 
-# 기타
-from typing import TypedDict
+class WeaviateVectorStore(BaseVectorStore):
 
-# Chunk dict 타입 정의
-class Chunk(TypedDict):
-    type: str
-    file_name: str
-    page_num: list[int]
-    content: str
-    metadata: str
+    def __init__(
+        self,
+        cluster_url: str,
+        api_key: str,
+        embedding_model
+    ):
 
-# 임베딩 모델 정의
-openai_embedding_model = OpenAIEmbeddings(
-    model="text-embedding-3-large",
-    dimensions=1024
-)
+        self.embedding_model = embedding_model
 
-# 한 pdf 파일의 청크들을 임베딩
-def embed_documents(chunks: list[Chunk]) -> bool:
+        self.weaviate_client = weaviate.connect_to_weaviate_cloud(
+            cluster_url=cluster_url,
+            auth_credentials=weaviate.classes.init.Auth.api_key(api_key),
+        )
+        
+        is_weaviate_client_connected = self.weaviate_client.is_ready()
 
-    for chunk in chunks:
-        match chunk['type']:
-            case 'text':
-                vectors = openai_embedding_model.embed_documents([chunk["content"]])
-
-    vectors = openai_embedding_model.embed_documents(["hello", "goodbye"])
-
-
-# 쿼리를 임베딩해서 유사도 검색 (매개값으로 벡터 스토어에 접근할 수 있는 객체가 주어져야 할듯)
-
+        if is_weaviate_client_connected:
+            print("✅ Successfully connected to Weaviate Cloud.")
+        else:
+            print("❌ Failed to connect to Weaviate Cloud.")
