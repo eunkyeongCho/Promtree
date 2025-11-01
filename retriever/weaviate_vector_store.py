@@ -7,17 +7,14 @@ class WeaviateVectorStore(BaseVectorStore):
         self,
         cluster_url: str,
         api_key: str,
-        embedding_model
     ):
 
-        self.embedding_model = embedding_model
-
-        self.weaviate_client = weaviate.connect_to_weaviate_cloud(
+        self.client = weaviate.connect_to_weaviate_cloud(
             cluster_url=cluster_url,
             auth_credentials=weaviate.classes.init.Auth.api_key(api_key),
         )
         
-        is_weaviate_client_connected = self.weaviate_client.is_ready()
+        is_weaviate_client_connected = self.client.is_ready()
 
         if is_weaviate_client_connected:
             print("✅ Successfully connected to Weaviate Cloud.")
