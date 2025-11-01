@@ -181,11 +181,6 @@ $RECYCLE.BIN/
 .claude/
 CLAUDE.md
 
-### 은경이 코드
-/retriever/embedding.py
-
-### Vector Store 추상 클래스는 나중에 따로 MR 올리기 위해 잠시 git ignore 처리
+### 나중에 따로 MR 올리기 위해 잠시 git ignore 처리
 /retriever/base_vector_store.py
-
-### RAG 실행 파이프라인 ipynb 파일은 나중에 따로 MR 올리기 위해 잠시 git ingore 처리
 /retriever/rag_retrieval_pipeline.ipynb
