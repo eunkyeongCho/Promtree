@@ -4,28 +4,41 @@ from langchain_core.documents import Document
 
 class WeaviateVectorStore(BaseVectorStore):
 
-    # Weaviate는 DB에서 Table에 해당하는 개념이 Class
+    # Weaviate에서 DB Table에 해당하는 개념이 Collection
     # 이름을 지정해줘야 하는데, 일단은 MaterialPropertyKnowledge으로 하드코딩하고 추후에 확장이 필요하다면 Initializer에서 받도록 수정할 예정
-    class_name = "MaterialPropertyKnowledge"
+    collection_name = "MaterialPropertyKnowledge"
 
     def __init__(self, cluster_url: str, api_key: str) -> None:
 
-        # Weaviate Client 객체 생성
+        # client 생성
         self.client = weaviate.connect_to_weaviate_cloud(
             cluster_url=cluster_url,
             auth_credentials=weaviate.classes.init.Auth.api_key(api_key),
         )
         
-        is_weaviate_client_connected = self.client.is_ready()
+        is_client_connected = self.client.is_ready()
 
-        if is_weaviate_client_connected:
+        if is_client_connected:
             print("✅ Successfully connected to Weaviate Cloud.")
         else:
             print("❌ Failed to connect to Weaviate Cloud.")
 
+        # collection 생성
+        existing_collections = [c.name for c in self.client.collections.list_all()]
+
+        if self.collection_name not in existing_collections:
+            self.client.collections.create(
+                name=self.collection_name,
+                properties=[
+                    {"name": "chunk", "dataType": "text"},
+                    {"name": "metadata", "dataType": "json"},
+                ],
+                vectorizer_config={"vectorizer": "none"}, # 외부 임베딩 모델 사용해서 임베딩
+            )
+
     def add_documents(self, documents: list[Document], embedding_model) -> bool:
 
-        collection = self.client.collections.get(self.class_name)
+        collection = self.client.collections.get(self.collection_name)
 
         contents = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
