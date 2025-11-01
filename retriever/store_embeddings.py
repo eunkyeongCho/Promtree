@@ -23,11 +23,11 @@ def embed_documents(chunks: list[Chunk]) -> bool:
 
     for chunk in chunks:
         match chunk['type']:
-            case "text":
-                # 텍스트 청크 처리
+            case 'text':
                 vectors = openai_embedding_model.embed_documents([chunk["content"]])
 
     vectors = openai_embedding_model.embed_documents(["hello", "goodbye"])
+
 
 # 쿼리를 임베딩해서 유사도 검색 (매개값으로 벡터 스토어에 접근할 수 있는 객체가 주어져야 할듯)
 
