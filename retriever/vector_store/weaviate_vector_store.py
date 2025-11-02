@@ -64,21 +64,16 @@ class WeaviateVectorStore(BaseVectorStore):
         """
         여러 청크를 임베딩해서 저장
         """
-        if self.client.collections.exists(self.collection_name): # Collection이 존재하는지 확인
-            collection = self.client.collections.use(self.collection_name)
-        else:
-            print(f"❌ Collection {self.collection_name} does not exist. Please create the collection first.") # 존재하지 않으면 에러 메세지 출력하고 바로 리턴
-            return False
 
         contents = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
 
         vectors = embedding_model.embed_documents(contents)
 
-        with self.client.dynamic() as batch: # fixed_size(), rate_limit()도 사용가능
+        with self.client.batch.dynamic() as batch: # fixed_size(), rate_limit()도 사용가능
             for content, metadata, vector in zip(contents, metadatas, vectors):
                 batch.add_object(
-                    class_name="MaterialPropertyKnowledge",
+                    class_name=self.collection_name,
                     properties={
                         "content": content,
                         "metadata": metadata,
@@ -86,6 +81,12 @@ class WeaviateVectorStore(BaseVectorStore):
                     vector=vector,
                 )
 
+        print(f"✅ Successfully stored vectorized documents into the '{self.collection_name}' collection.")
+        print("ℹ️  When you have finished all Weaviate-related operations, call `close()` to safely close the client connection.")
+
         return True
 
     # def similarity_search
+
+    def close(self):
+        self.client.close()
