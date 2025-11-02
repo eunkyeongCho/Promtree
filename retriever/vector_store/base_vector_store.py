@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from langchain_core.documents import Document
 
 class BaseVectorStore(ABC):
-
     @abstractmethod
     def add_documents(self, documents: list[Document], embedding_model, *args):
         pass

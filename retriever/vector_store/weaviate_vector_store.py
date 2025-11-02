@@ -1,4 +1,3 @@
-# Weaviate
 import weaviate
 from weaviate.classes.config import (
     Configure,
@@ -15,10 +14,8 @@ from weaviate.classes.query import (
 )
 from weaviate.classes.init import Auth
 
-# LangChain
 from langchain_core.documents import Document
 
-# Base
 from base_vector_store import BaseVectorStore
 from embedding_model.base_embedding_model import BaseEmbeddingModel
 
