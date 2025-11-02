@@ -42,7 +42,7 @@ class WeaviateVectorStore(BaseVectorStore):
             self.client.collections.create(
                 name=self.collection_name,
                 properties=[ # Property 정의 (Column과 같은 개념)
-                    Property(name="chunk", data_type=DataType.TEXT, description="원본 Chunk 내용"),
+                    Property(name="content", data_type=DataType.TEXT, description="원본 Chunk 내용"),
                     Property(name="metadata", data_type=DataType.JSON, description="원본 Chunk 메타데이터(file_name, page_num, etc.)")
                 ],
                 vector_config=Configure.Vectorizer.none(), # 외부 임베딩 모델 사용해서 임베딩을 하지 않음
@@ -64,19 +64,23 @@ class WeaviateVectorStore(BaseVectorStore):
         """
         여러 청크를 임베딩해서 저장
         """
-
-        collection = self.client.collections.get(self.collection_name)
+        if self.client.collections.exists(self.collection_name): # Collection이 존재하는지 확인
+            collection = self.client.collections.use(self.collection_name)
+        else:
+            print(f"❌ Collection {self.collection_name} does not exist. Please create the collection first.") # 존재하지 않으면 에러 메세지 출력하고 바로 리턴
+            return False
 
         contents = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
 
         vectors = embedding_model.embed_documents(contents)
 
-        with collection.batch.dynamic() as batch:
+        with self.client.dynamic() as batch: # fixed_size(), rate_limit()도 사용가능
             for content, metadata, vector in zip(contents, metadatas, vectors):
-                batch.add_data_object(
+                batch.add_object(
+                    class_name="MaterialPropertyKnowledge",
                     properties={
-                        "text": content,
+                        "content": content,
                         "metadata": metadata,
                     },
                     vector=vector,
