@@ -6,12 +6,28 @@ from embedding_model.base_embedding_model import BaseEmbeddingModel
 class OpenAIEmbeddingModel(BaseEmbeddingModel):
 
     def __init__(self, model: str, api_key: str) -> None:
+        """
+            OpenAI 임베딩 모델 초기화.
+
+            Args:
+                model (str): 사용할 임베딩 모델 이름 (예: "text-embedding-3-large")
+                api_key (str): env 파일에서 OPENAI_API_KEY 로드
+        """
         self.embedding_model = OpenAIEmbeddings(
             model="text-embedding-3-large",
             dimensions=1024
         )
 
     def embed_documents(self, documents: list[str]) -> list[list[float]]:
+        """
+            여러 문서 문자열을 임베딩하여 벡터 리스트로 반환합니다.
+
+            Args:
+                documents (list[str]): 임베딩할 텍스트 리스트
+
+            Returns:
+                list[list[float]]: 문서별 임베딩 벡터 리스트
+        """
 
         if not documents:
             return []
@@ -27,6 +43,15 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
         return document_vectors
 
     def embed_query(self, information_need: str):
+        """
+            단일 질의문(query)를 임베딩하여 벡터로 반환합니다.
+
+            Args:
+                information_need (str): 검색용 질의 문장
+
+            Returns:
+                list[float]: 질의문 임베딩 벡터
+        """
 
         if not information_need:
             return []
