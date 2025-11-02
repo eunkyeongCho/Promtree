@@ -60,9 +60,19 @@ class WeaviateVectorStore(BaseVectorStore):
                 )
             )
 
-    def add_documents(self, documents: list[Document], embedding_model) -> bool:
+    def add_documents(self, documents: list[Document], embedding_model: BaseEmbeddingModel) -> bool:
         """
-        여러 청크를 임베딩해서 저장
+            Document 리스트를 임베딩하여 Weaviate 컬렉션에 일괄 저장합니다.
+
+            주어진 Document에서 텍스트와 메타데이터를 추출하고, 매개값으로 받은 임베딩 모델로 벡터를 생성한 뒤 batch 모드를 사용하여 저장합니다.
+            batch 저장은 개별 업로드보다 훨씬 빠르게 동작합니다.
+
+            Args:
+                documents (list[Document]): 저장할 Document 목록. (LangChain Core Document타입의 배열)
+                embedding_model (BaseEmbeddingModel): base_embedding_model.py의 구현체
+
+            Returns:
+                bool: 저장 완료 시 True.
         """
 
         contents = [doc.page_content for doc in documents]
