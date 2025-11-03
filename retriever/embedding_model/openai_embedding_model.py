@@ -26,7 +26,7 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
                 documents (list[str]): 임베딩할 텍스트 리스트
 
             Returns:
-                list[list[float]]: 문서별 임베딩 벡터 리스트
+                list[list[float]]: 텍스트별 임베딩 벡터 리스트
         """
 
         if not documents:

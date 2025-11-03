@@ -114,14 +114,14 @@ class WeaviateVectorStore(BaseVectorStore):
 
     def similarity_search(self, information_need: str, embedding_model: BaseEmbeddingModel) -> list[Document]:
         """
-        비교해서 검색할 문자열에 대해 임베딩을 생성한 후, Weaviate에서 유사 문서를 벡터 기반으로 검색합니다.
+            비교해서 검색할 문자열에 대해 임베딩을 생성한 후, Weaviate에서 유사 문서를 벡터 기반으로 검색합니다.
 
-        Args:
-            information_need (str): 검색 질의 문자열
-            embedding_model (BaseEmbeddingModel): 사용할 임베딩 모델
+            Args:
+                information_need (str): 검색 질의 문자열
+                embedding_model (BaseEmbeddingModel): 사용할 임베딩 모델
 
-        Returns:
-            list[Document]: 유사도가 높은 순으로 정렬된 Document 리스트
+            Returns:
+                list[Document]: 유사도가 높은 순으로 정렬된 Document 리스트
         """
 
         # information_need 벡터화
