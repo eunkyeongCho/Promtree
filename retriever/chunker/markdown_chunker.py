@@ -55,8 +55,8 @@ def get_pages_info(md: str) -> list:
         형식: [[page_num, (content_start_index, content_end_index)]]
         설명:
             - page_num (int): 페이지 번호
-            - content_start_index (int): '>>> page' 다음에 나오는 실제 내용의 시작 인덱스.
-            - content_end_index (int): '>>> pend' 직전에 끝나는 실제 내용의 끝 인덱스.
+            - content_start_index (int): '>>> page_0' 다음에 나오는 실제 내용의 시작 인덱스.
+            - content_end_index (int): 다음 '>>> page_1' 직전에 끝나는 실제 내용의 끝 인덱스.
     """
 
     # >>> page_0 ... 정규식 (그 다음 >>> page_1이 나오기 직전까지)
@@ -110,11 +110,11 @@ def generate_image_chunk(md: str) -> dict[str, str | list[dict]]:
     마크다운 문자열에서 image에 해당하는 부분을 전부 공백으로 치환하고 image 타입 청크를 생성합니다.
 
     Args:
-        md(str): >>> page, >>> pend가 제거된 마크다운 문자열
+        md(str): >>> page가 제거된 마크다운 문자열
 
     Returns:
         dict: 다음 두 개의 key를 포함한 딕셔너리
-            - md_without_image(str): 모든 이미지지가 공백으로 치환된 마크다운 문자열
+            - md_without_image(str): 모든 이미지가 공백으로 치환된 마크다운 문자열
             - image_raw_chunks(list[dict]): image 타입 raw 청크 리스트 (file_name, page_num 키 생성 전)
     """
 
@@ -259,7 +259,7 @@ def generate_text_chunk(md: str) -> list:
     header path란, 각 청크가 속한 header가 속한 최상위 header까지의 모든 header를 공백 하나를 사이에 두고 이어붙인 문자열입니다.
 
     Header가 포함되지 않은 문자열이라면, Recursive Chunking 합니다.
-    청크 하나의 크기는 1000자, overlap 크기는 200자 입니다.
+    chunk 크기는 1000자, overlap 크기는 200자 입니다.
 
     Args:
         md(str): table이 제거된 마크다운 문자열
@@ -339,7 +339,7 @@ def generate_text_chunk(md: str) -> list:
                     texts['start_index'] = line_match.start()
                     texts['end_index'] = line_match.end() - 1
 
-                else: # 기존에 쌓인 text가 있다면 그냥 텍스트만 append
+                else: # 기존에 쌓인 text가 있다면 그냥 텍스트만 이어붙이기
                     texts['content'] = texts['content'] + line
                     texts['end_index'] = line_match.end() - 1
 
