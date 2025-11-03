@@ -14,7 +14,7 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
                 api_key (str): env 파일에서 OPENAI_API_KEY 로드
         """
         self.embedding_model = OpenAIEmbeddings(
-            model="text-embedding-3-large",
+            model=model,
             dimensions=1024
         )
 
