@@ -142,7 +142,7 @@ class WeaviateVectorStore(BaseVectorStore):
             vector=information_need_vector,
             fusion_type=HybridFusion.RANKED, # 키워드 검색 점수와 벡터 검색 점수를 정규화하지 않고 순위에만 기반해서 검색. (RELATIVE_SCORE도 선택 가능한데 소재 물성 쪽은 RANKED가 더 안정적인 결과를 가져온다고 함) 
             bm25_operator=BM25Operator.or_(minimum_match=2), # 쿼리의 키워드 최소 2개 이상 포함되어 있어야 함 (기본 추천값)
-            alpha=0.5, # 물성 소재를 다루므로 다른 도메인보다키워드가 좀 더 중요한 경향이 있어서 기본 추천값인 0.75보다 좀 더 키워드 검색에 비중을 두는 0.5 정도로 설정
+            alpha=0.5, # 소재 물성을 다루므로 다른 도메인 보다 키워드가 좀 더 중요한 경향이 있어서 기본 추천값인 0.75보다 좀 더 키워드 검색에 비중을 두는 0.5 정도로 설정
             limit=50, # 후에 mmr, reranking 단계에서 후처리를 하므로 hybrid search 단계에서는 넉넉하게 50개 가져오기
             # max_vector_distance은 일반적으로 기술적인 문서는 유의미한 결과값도 벡터 공간 상에서는 멀게 표현되는 경우가 있어서 잘 사용하지 않는 파라미터라고 해서 일단 제외
             return_metadata=MetadataQuery(score=True, explain_score=True) # score와 그에 대한 설명 받기
