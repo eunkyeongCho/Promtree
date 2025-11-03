@@ -62,8 +62,8 @@ def order_and_save_md(output_txt_path, layout_json_path, save_md_path = None):
                 for _, _, content in sorted_elems:
                     markdown.append(content)
 
-                
-                        
+
+
     with open(save_md_path, 'w', encoding='utf-8') as f:
         for line in markdown:
             f.write(line)
