@@ -203,17 +203,31 @@ def save_faiss_index(index: faiss.Index, filename: str = "faiss_index.bin"):
 def load_faiss_index(filename: str = "faiss_index.bin") -> faiss.Index:
     """
     저장된 FAISS 인덱스를 로드
-    
+
     Args:
-        filename: 로드할 파일명
-        
+        filename: 로드할 파일명 (상대 경로 또는 절대 경로)
+
     Returns:
-        faiss.Index: 로드된 FAISS 인덱스
+        faiss.Index: 로드된 FAISS 인덱스 또는 None
     """
+    import os
+
+    # 상대 경로인 경우, embedding_model 폴더 기준으로 변환
+    if not os.path.isabs(filename):
+        # 현재 파일(embedding.py)의 디렉토리를 기준으로 경로 설정
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # embedding_model 폴더 안에 있는 파일을 찾음
+        filename = os.path.join(current_dir, filename)
+
     try:
-        index = faiss.read_index(filename)
-        print(f"FAISS 인덱스 로드 완료: {filename} ({index.ntotal}개 벡터)")
-        return index
+        if os.path.exists(filename):
+            index = faiss.read_index(filename)
+            print(f"FAISS 인덱스 로드 완료: {filename} ({index.ntotal}개 벡터)")
+            return index
+        else:
+            print(f"FAISS 인덱스 파일이 없습니다: {filename}")
+            print("벡터 검색 없이 계속 진행합니다.")
+            return None
     except Exception as e:
         print(f"FAISS 인덱스 로드 실패: {e}")
         return None
