@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
 import os
 import re
-import pandas as pd
 from pymongo import MongoClient
 from bson import ObjectId
 import json
@@ -179,33 +178,87 @@ def get_page_number_for_table(table_lines: list, original_content: str) -> list:
         return [1]  # 페이지 마커가 없으면 기본값 1
 
 
-def is_table_line(line: str) -> bool:
+def is_json_table_start(line: str) -> bool:
     """
-    라인이 표 라인인지 확인 (더 정확한 표 감지)
-    
+    라인이 JSON 표 시작인지 확인 (<table>)
+
     Args:
         line: 확인할 라인
-        
+
     Returns:
-        bool: 표 라인 여부
+        bool: JSON 표 시작 여부
     """
-    line = line.strip()
-    
-    # 빈 줄이면 표가 아님
-    if not line:
-        return False
-    
-    # |로 시작하고 끝나며, 중간에 |가 있는지 확인
-    if line.startswith('|') and line.endswith('|'):
-        # | 사이에 내용이 있는지 확인
-        parts = line.split('|')
-        if len(parts) >= 3:  # 시작|내용|끝
-            # 각 부분에 실제 내용이 있는지 확인
-            content_parts = [part.strip() for part in parts[1:-1]]
-            if any(part for part in content_parts):  # 빈 부분이 아닌 부분이 있으면
-                return True
-    
-    return False
+    return line.strip() == '<table>'
+
+
+def is_json_table_end(line: str) -> bool:
+    """
+    라인이 JSON 표 종료인지 확인 (</table>)
+
+    Args:
+        line: 확인할 라인
+
+    Returns:
+        bool: JSON 표 종료 여부
+    """
+    return line.strip() == '</table>'
+
+
+def parse_json_table_lines(table_lines: list) -> list:
+    """
+    <table> 태그 내의 JSON 라인들을 파싱
+
+    Args:
+        table_lines: <table>과 </table> 사이의 모든 라인들 (태그 제외)
+
+    Returns:
+        list: 파싱된 key-value 딕셔너리 리스트
+    """
+    result = []
+
+    for line in table_lines:
+        line = line.strip()
+
+        # 빈 줄 건너뛰기
+        if not line:
+            continue
+
+        # 마지막 콤마 제거
+        if line.endswith(','):
+            line = line[:-1]
+
+        try:
+            # JSON 파싱
+            data = json.loads(line)
+            if isinstance(data, dict):
+                result.append(data)
+        except json.JSONDecodeError:
+            # 파싱 실패시 건너뛰기
+            continue
+
+    return result
+
+
+def json_table_to_text(table_data: list) -> str:
+    """
+    JSON 표 데이터를 검색 가능한 텍스트로 변환
+
+    Args:
+        table_data: key-value 딕셔너리 리스트
+
+    Returns:
+        str: 변환된 텍스트
+    """
+    text_lines = []
+
+    for item in table_data:
+        # 각 row를 텍스트로 변환
+        row_parts = []
+        for key, value in item.items():
+            row_parts.append(f"{key}: {value}")
+        text_lines.append(" | ".join(row_parts))
+
+    return '\n'.join(text_lines)
 
 
 def extract_headings_and_sections(content: str) -> tuple:
@@ -230,10 +283,9 @@ def extract_headings_and_sections(content: str) -> tuple:
     
     for line in lines:
         original_line = line
-        line = line.strip()
-        
-        # 헤딩 감지
-        if line.startswith('#'):
+
+        # JSON 표 시작 감지
+        if is_json_table_start(line):
             # 이전 섹션 저장
             if current_section and not in_table:
                 sections.append({
@@ -242,54 +294,56 @@ def extract_headings_and_sections(content: str) -> tuple:
                     'heading': current_heading,
                     'level': current_level
                 })
-            
+                current_section = []
+
+            in_table = True
+            current_table = []  # <table> 태그는 포함하지 않음
+            continue
+
+        # JSON 표 종료 감지
+        elif is_json_table_end(line):
+            if in_table and current_table:
+                tables.append({
+                    'table_lines': current_table,
+                    'section_path': section_path.copy(),
+                    'heading': current_heading
+                })
+                current_table = []
+            in_table = False
+            continue
+
+        # 표 내부인 경우
+        elif in_table:
+            current_table.append(original_line)
+
+        # 헤딩 감지
+        elif line.strip().startswith('#'):
+            # 이전 섹션 저장
+            if current_section:
+                sections.append({
+                    'content': '\n'.join(current_section),
+                    'section_path': section_path.copy(),
+                    'heading': current_heading,
+                    'level': current_level
+                })
+
             # 새 섹션 시작
-            level = len(line) - len(line.lstrip('#'))
-            heading = line.lstrip('#').strip()
-            
+            stripped_line = line.strip()
+            level = len(stripped_line) - len(stripped_line.lstrip('#'))
+            heading = stripped_line.lstrip('#').strip()
+
             # section_path 업데이트
-            section_path = section_path[:level-1] + [heading]
+            # 모든 헤딩을 단일 요소 배열로 저장 (계층 구조 없음)
+            # 이유: 문서에 level 1이 없고 모두 level 2이므로 계층이 없음
+            section_path = [heading]
             current_heading = heading
             current_level = level
-            
+
             current_section = [original_line]
-            in_table = False
-            current_table = []
-            
-        # 표 감지 (개선된 로직)
-        elif is_table_line(original_line):
-            if not in_table:
-                # 이전 섹션 저장
-                if current_section:
-                    sections.append({
-                        'content': '\n'.join(current_section),
-                        'section_path': section_path.copy(),
-                        'heading': current_heading,
-                        'level': current_level
-                    })
-                current_section = []
-            
-            in_table = True
-            current_table.append(original_line)
-            
-        # 표가 아닌 일반 텍스트
-        elif not in_table:
-            current_section.append(original_line)
+
+        # 일반 텍스트
         else:
-            # 표 내부의 빈 줄이나 다른 내용
-            if line == '' or not is_table_line(original_line):
-                # 표 종료
-                if current_table:
-                    tables.append({
-                        'table_lines': current_table,
-                        'section_path': section_path.copy(),
-                        'heading': current_heading
-                    })
-                current_table = []
-                in_table = False
-                current_section = [original_line] if original_line else []
-            else:
-                current_table.append(original_line)
+            current_section.append(original_line)
     
     # 마지막 섹션/표 저장
     if current_section and not in_table:
@@ -308,43 +362,6 @@ def extract_headings_and_sections(content: str) -> tuple:
         })
     
     return sections, tables
-
-
-def parse_markdown_table(table_lines: list) -> pd.DataFrame:
-    """
-    마크다운 표를 pandas DataFrame으로 변환
-    
-    Args:
-        table_lines: 표의 각 줄들
-        
-    Returns:
-        pd.DataFrame: 변환된 DataFrame (실패시 None)
-    """
-    if len(table_lines) < 2:
-        return None
-    
-    # 헤더와 구분선 제거
-    header_line = table_lines[0]
-    data_lines = [line for line in table_lines[2:] if line.strip() and is_table_line(line)]
-    
-    if not data_lines:
-        return None
-    
-    # 헤더 파싱
-    headers = [col.strip() for col in header_line.split('|')[1:-1]]
-    
-    # 데이터 파싱
-    data = []
-    for line in data_lines:
-        if line.strip() and is_table_line(line):
-            row = [col.strip() for col in line.split('|')[1:-1]]
-            if len(row) == len(headers):
-                data.append(row)
-    
-    if not data:
-        return None
-    
-    return pd.DataFrame(data, columns=headers)
 
 
 def find_sentence_boundary(text: str, target_pos: int, window_size: int = WINDOW_SIZE) -> int:
@@ -599,25 +616,13 @@ def process_document_final(doc: dict) -> list:
         content = section['content'].strip()
         if not content:
             continue
-        
-        # 인라인 표 제거 (|로 시작하는 줄들)
-        lines = content.split('\n')
-        text_lines = []
-        
-        for line in lines:
-            if not is_table_line(line):  # 표 라인이 아니면 추가
-                text_lines.append(line)
-        
-        cleaned_content = '\n'.join(text_lines).strip()
-        if not cleaned_content:
-            continue
-        
+
         # 키워드 추출 (볼드 텍스트)
-        keywords = re.findall(r'\*\*(.*?)\*\*', cleaned_content)
-        
+        keywords = re.findall(r'\*\*(.*?)\*\*', content)
+
         chunk = {
             'chunk_type': 'text',
-            'content': cleaned_content,
+            'content': content,
             'section_path': section['section_path'],
             'heading': section['heading'],
             'level': section['level'],
@@ -661,33 +666,38 @@ def process_document_final(doc: dict) -> list:
     text_chunks = split_large_chunks(text_chunks)
     print(f"[DEBUG] 큰 청크 분할: {before_split}개 -> {len(text_chunks)}개")
     
-    # 6. 표 청크 생성 (표별로 페이지 번호 설정)
+    # 6. 표 청크 생성 (표 전체를 하나의 청크로, 오버랩 없음)
     table_chunks = []
     for idx, table in enumerate(tables):
         # 표의 페이지 번호 찾기
         table_page_num = get_page_number_for_table(table['table_lines'], doc['content'])
-        
-        table_df = parse_markdown_table(table['table_lines'])
-        if table_df is not None:
-            print(f"[DEBUG] 표 {idx+1}/{len(tables)}: {len(table_df)}행 -> 페이지 {table_page_num}")
-            # 표의 각 행을 청크로 변환
-            for idx, row in table_df.iterrows():
-                row_dict = row.to_dict()
-                
-                chunk = {
-                    'chunk_type': 'table_row',
-                    'content': json.dumps(row_dict, ensure_ascii=False),
-                    'section_path': table['section_path'],
-                    'heading': table['heading'],
-                    'level': len(table['section_path']),
-                    'keywords': [],
-                    'row_data': row_dict,
-                    'row_index': idx,
-                    'source_file_name': doc['file_name'],
-                    'page_num': table_page_num,  # 표 기반 페이지 번호
-                    'chunk_id': f"{doc['_id']}_table_{len(table_chunks)}"
-                }
-                table_chunks.append(chunk)
+
+        # JSON 표 파싱
+        table_data = parse_json_table_lines(table['table_lines'])
+        if table_data:
+            print(f"[DEBUG] 표 {idx+1}/{len(tables)}: {len(table_data)}행 -> 페이지 {table_page_num}")
+
+            # 표 전체를 하나의 청크로 생성 (오버랩 없음)
+            # 검색 가능한 텍스트 형태로 변환
+            table_text = json_table_to_text(table_data)
+
+            # 표 원본 데이터도 함께 저장
+            table_json = json.dumps(table_data, ensure_ascii=False)
+
+            chunk = {
+                'chunk_type': 'table',
+                'content': table_text,  # 검색 가능한 텍스트
+                'table_data': table_data,  # 원본 JSON 데이터
+                'table_json': table_json,  # JSON 문자열
+                'section_path': table['section_path'],
+                'heading': table['heading'],
+                'level': len(table['section_path']),
+                'keywords': [],
+                'source_file_name': doc['file_name'],
+                'page_num': table_page_num,
+                'chunk_id': f"{doc['_id']}_table_{len(table_chunks)}"
+            }
+            table_chunks.append(chunk)
     
     all_chunks = text_chunks + table_chunks
     print(f"[DEBUG] 문서 처리 완료: 텍스트 청크 {len(text_chunks)}개 + 표 청크 {len(table_chunks)}개 = 총 {len(all_chunks)}개\n")
