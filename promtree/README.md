@@ -32,7 +32,7 @@ pip install promtree
 ### Install from source
 
 ```bash
-git clone https://github.com/Team-PromTree/promtree.git
+git clone https://lab.ssafy.com/s13-final/S13P31S307.git
 cd promtree
 pip install -e .
 ```
