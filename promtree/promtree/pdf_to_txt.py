@@ -37,7 +37,7 @@ def pdf_to_text(pdf_path: str, output_path: str = None) -> None:
             if btype == 0: # 텍스트
                 for line in block.get("lines", []):
                     for span in line.get("spans", []):
-                        doc_element.append((*span['bbox'], span['text']))
+                        doc_element.append((*span['bbox'], span['text'], 0))
 
             elif btype == 1: # 이미지
                 img_name = f"page{page_num}_{block['number']}.{block['ext']}"
@@ -46,7 +46,7 @@ def pdf_to_text(pdf_path: str, output_path: str = None) -> None:
                 with open(url, 'wb') as img_file:
                     img_file.write(block['image'])
 
-                doc_element.append((*block['bbox'], f"![](./images/{img_name})"))
+                doc_element.append((*block['bbox'], f"![](./images/{img_name})", 0))
 
             else:
                 raise TypeError(f"Unsupported block type: {btype}")
