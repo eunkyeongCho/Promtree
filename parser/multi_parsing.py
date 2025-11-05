@@ -1,6 +1,6 @@
 from pathlib import Path
 from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling_core.types.doc import TextItem, TableItem, PictureItem
+from docling_core.types.doc import TextItem, TableItem, PictureItem, SectionHeaderItem
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 import base64
@@ -63,9 +63,14 @@ def process_single_pdf(pdf_file: Path, output_dir: Path, converter: DocumentConv
                     current_page = page_no
                     combined_content.append(f">>> page_{page_no}")
 
-            if isinstance(item, TextItem):
+            if isinstance(item, SectionHeaderItem):
+                # 섹션 아이템은 제목으로 추가
+                combined_content.append(f"## {item.text}")
+
+            elif isinstance(item, TextItem):
                 # 텍스트 아이템은 markdown 형식으로
                 combined_content.append(item.text)
+            
 
             elif isinstance(item, TableItem):
                 # 표 아이템은 HTML로 변환해서 추가
