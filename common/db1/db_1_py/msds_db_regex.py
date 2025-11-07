@@ -260,6 +260,13 @@ BASIS_PATTERNS = [
 # 동의어 토큰 분할용 구분자(쉼표/세미콜론/슬래시/수직바/개행)
 DELIMS_RX = re.compile(r"[;,/|\n]+")
 
-# 혼합물 키워드(한/영) 감지
-KO_MIX_RX = re.compile(r"^\s*혼합물\s*$", re.I)
-EN_MIX_RX = re.compile(r"^\s*mixture\s*$", re.I)
+# 범위
+RANGE_RX = re.compile(r"^\s*(?:~|≈)?\s*(\d+(?:\.\d+)?)\s*[-–~]\s*(\d+(?:\.\d+)?)\s*%?\s*$")
+LT_RX    = re.compile(r"^\s*[<≤]\s*(\d+(?:\.\d+)?)\s*%?\s*$")
+EQ_RX    = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*%?\s*$")
+
+# 비밀
+CONF_TOKENS = {
+    "영업 비밀","영업비밀","비공개","미공개","자료 없음",
+    "confidential","trade secret","not available","n/a","na","not applicable"
+}

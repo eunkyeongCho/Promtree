@@ -1,4 +1,3 @@
-import os
 import json
 from pathlib import Path
 
@@ -7,18 +6,10 @@ from pathlib import Path
 
 MSDS 데이터 저장을 위한 PostgreSQL 데이터베이스 스키마 관리 모듈.
 
-이 모듈은 MSDS(물질안전보건자료) 데이터를 저장하기 위한 PostgreSQL 테이블과
-인덱스를 생성, 초기화하고, 파싱된 데이터를 데이터베이스에 저장(upsert)하는
-함수들을 포함합니다.
-
-주요 기능:
-- `init_msds_schema`: 'products', 'ingredients', 'ingredient_synonyms'
-  테이블과 관련 인덱스를 모두 생성하여 스키마를 초기화합니다.
-- `save_current_parse_to_postgres`: 파싱된 제품 및 성분 정보를 받아
-  데이터베이스에 저장합니다.
-- 테이블 생성, 인덱스 생성, 데이터 삽입(Insert)/업데이트(Upsert)를 위한
-  개별 함수들을 제공합니다.
+- init_msds_schema: products, ingredients, ingredient_synonyms 테이블과 인덱스를 생성
+- save_current_parse_to_postgres: 파싱된 제품/성분 정보를 받아 저장(업서트)
 """
+
 
 def create_products_table(conn):
     """제품(MSDS 문서) 정보 저장 테이블 생성"""
@@ -35,7 +26,6 @@ def create_products_table(conn):
         """)
     conn.commit()
     print("products 테이블 생성 완료")
-
 
 def create_ingredients_table(conn):
     """성분 정보 저장 테이블 생성"""
@@ -55,6 +45,9 @@ def create_ingredients_table(conn):
                 conc_basis TEXT,
                 conc_op_min TEXT,
                 conc_op_max TEXT,
+                conc_adjusted NUMERIC,
+                is_cas_secret BOOLEAN DEFAULT FALSE,
+                is_conc_secret  BOOLEAN DEFAULT FALSE,
                 synonym_jsonb JSONB,
                 additional_info JSONB,
                 CONSTRAINT fk_ingredients_products
@@ -64,7 +57,6 @@ def create_ingredients_table(conn):
         """)
     conn.commit()
     print("ingredients 테이블 생성 완료")
-
 
 def create_ingredient_synonyms_table(conn):
     """성분 동의어 저장 테이블 생성"""
@@ -83,7 +75,6 @@ def create_ingredient_synonyms_table(conn):
     conn.commit()
     print("ingredient_synonyms 테이블 생성 완료")
 
-
 def create_indexes(conn):
     """데이터 조회 성능 향상을 위해 주요 컬럼에 인덱스를 생성"""
     with conn.cursor() as cursor:
@@ -92,20 +83,20 @@ def create_indexes(conn):
             CREATE INDEX IF NOT EXISTS idx_ingredients_cas 
             ON ingredients(cas);
         """)
-        
         # 농도 범위 검색용 복합 인덱스
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_ingredients_conc 
             ON ingredients(conc_unit, conc_basis, conc_min, conc_max);
         """)
-        
         # JSONB 동의어 검색용 GIN 인덱스
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_ingredients_syn_gin 
-            ON ingredients USING GIN (synonym_jsonb jsonb_path_ops);
+            ON ingredients USING GIN (synonym_jsonb);
         """)
     conn.commit()
     print("인덱스 생성 완료")
+
+
 
 
 def init_msds_schema(conn):
@@ -113,14 +104,13 @@ def init_msds_schema(conn):
     print("=" * 50)
     print("MSDS PostgreSQL 스키마 초기화")
     print("=" * 50)
-    
+
     create_products_table(conn)
     create_ingredients_table(conn)
     create_ingredient_synonyms_table(conn)
     create_indexes(conn)
-    
-    print("\n모든 테이블 및 인덱스 생성 완료")
 
+    print("\n모든 테이블 및 인덱스 생성 완료")
 
 def check_tables_exist(conn):
     """생성된 테이블 확인"""
@@ -129,26 +119,27 @@ def check_tables_exist(conn):
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
-            AND table_name IN ('products', 'ingredients', 'ingredient_synonyms')
+              AND table_name IN ('products', 'ingredients', 'ingredient_synonyms')
             ORDER BY table_name;
         """)
         tables = cursor.fetchall()
-    
+
     print("\n 생성된 테이블 목록:")
     for table in tables:
         print(f"  - {table[0]}")
-    
     return [t[0] for t in tables]
+
+
 
 def upsert_product(conn, file_name: str, document_id: str, product_name: str, company_name: str | None = None):
     sql = """
-    INSERT INTO products (file_name, document_id, product_name, company_name)
-    VALUES (%s, %s, %s, %s)
-    ON CONFLICT (file_name, product_name)
-    DO UPDATE SET 
-        document_id = EXCLUDED.document_id,
-        company_name = EXCLUDED.company_name
-    RETURNING id;
+        INSERT INTO products (file_name, document_id, product_name, company_name)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (file_name, product_name)
+        DO UPDATE SET 
+            document_id = EXCLUDED.document_id,
+            company_name = EXCLUDED.company_name
+        RETURNING id;
     """
     with conn.cursor() as cur:
         cur.execute(sql, (file_name, document_id, product_name, company_name))
@@ -161,24 +152,26 @@ def upsert_product(conn, file_name: str, document_id: str, product_name: str, co
 
 
 def insert_ingredient(conn, product_id: int, ing: dict) -> int:
-    """ ingredients에 한 개 성분 삽입 후 id 반환 """
+    """ingredients에 한 개 성분 삽입 후 id 반환"""
     c = ing.get("concentration") or {}
     syn = ing.get("synonym") or []
     add = ing.get("additional_info") or {}
 
     sql = """
-    INSERT INTO ingredients (
-        product_id, name, cas, ec_number,
-        conc_raw, conc_value, conc_min, conc_max,
-        conc_unit, conc_basis, conc_op_min, conc_op_max,
-        synonym_jsonb, additional_info
-    ) VALUES (
-        %s, %s, %s, %s,
-        %s, %s, %s, %s,
-        %s, %s, %s, %s,
-        %s::jsonb, %s::jsonb
-    )
-    RETURNING id;
+        INSERT INTO ingredients (
+            product_id, name, cas, ec_number,
+            conc_raw, conc_value, conc_min, conc_max,
+            conc_unit, conc_basis, conc_op_min, conc_op_max,
+            conc_adjusted, is_cas_secret, is_conc_secret,
+            synonym_jsonb, additional_info
+        ) VALUES (
+            %s, %s, %s, %s,
+            %s, %s, %s, %s,
+            %s, %s, %s, %s,
+            %s, %s, %s,
+            %s::jsonb, %s::jsonb
+        )
+        RETURNING id;
     """
     with conn.cursor() as cur:
         cur.execute(sql, (
@@ -194,22 +187,24 @@ def insert_ingredient(conn, product_id: int, ing: dict) -> int:
             c.get("basis"),
             c.get("op_min"),
             c.get("op_max"),
+            ing.get("conc_adjusted"),
+            ing.get("is_cas_secret", False),
+            ing.get("is_conc_secret", False),
             json.dumps(syn, ensure_ascii=False),
             json.dumps(add, ensure_ascii=False),
         ))
         ingredient_id = cur.fetchone()[0]
-    conn.commit()
+        conn.commit()
     return ingredient_id
 
-
 def insert_synonyms_rows(conn, ingredient_id: int, synonyms: list[str]):
-    """ ingredient_synonyms 테이블에 동의어 다건 삽입 """
+    """ingredient_synonyms 테이블에 동의어 다건 삽입"""
     if not synonyms:
         return
     sql = """
-    INSERT INTO ingredient_synonyms (ingredient_id, synonym)
-    VALUES (%s, %s)
-    ON CONFLICT (ingredient_id, synonym) DO NOTHING;
+        INSERT INTO ingredient_synonyms (ingredient_id, synonym)
+        VALUES (%s, %s)
+        ON CONFLICT (ingredient_id, synonym) DO NOTHING;
     """
     with conn.cursor() as cur:
         for s in synonyms:
@@ -218,29 +213,29 @@ def insert_synonyms_rows(conn, ingredient_id: int, synonyms: list[str]):
     conn.commit()
 
 
+
 def save_current_parse_to_postgres(
-    conn, 
-    md_path: str, 
-    section1_result: dict, 
-    sec1_text: str, 
+    conn,
+    md_path: str,
+    section1_result: dict,
+    sec1_text: str,
     ingredients: list[dict],
-    document_id: str = None
+    document_id: str | None = None
 ) -> int:
     # 1) 제품 upsert
     file_name = Path(md_path).name
     product_name = section1_result.get("product_name")
     company_name = section1_result.get("company_name")
-    
-    # document_id가 없으면 file_name으로 대체
+
     if document_id is None:
         document_id = file_name
-    
+
     print(file_name, product_name, company_name, document_id)
 
     product_id = upsert_product(
         conn,
         file_name=file_name,
-        document_id=document_id,  # 추가
+        document_id=document_id,
         product_name=product_name,
         company_name=company_name
     )
@@ -251,5 +246,3 @@ def save_current_parse_to_postgres(
         insert_synonyms_rows(conn, ing_id, it.get("synonym") or [])
 
     return product_id
-
-

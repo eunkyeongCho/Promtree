@@ -4,9 +4,11 @@ from msds_db_ingredients_slicer import slice_section_2_or_3
 from msds_db_ingredients_LLM import extract_ingredients_with_ollama
 from msds_db_ingredients_postprocess import (
     postprocess_synonyms,
-    fix_name_mixture,
     normalize_unit_basis,
-    enrich_cas_and_conc
+    enrich_cas_and_conc,
+    parse_conc_raw,
+    normalize_concentration_to_100,
+    apply_confidential_flags,
 )
 
 """
@@ -52,9 +54,21 @@ def extract_section23_and_ingredients(text: str, debug: bool = True) -> Dict:
         print("[INFO] 후처리 시작...")
     
     ingredients = postprocess_synonyms(ingredients)
-    ingredients = fix_name_mixture(ingredients)
     ingredients = [normalize_unit_basis(it, section2_3_text) for it in ingredients]
     ingredients = enrich_cas_and_conc(ingredients)
+    ingredients = apply_confidential_flags(ingredients)
+
+        
+    for it in ingredients:
+        if "is_conc_confidential" in it and "is_conc_secret" not in it:
+            it["is_conc_secret"] = bool(it["is_conc_confidential"])
+        it["concentration"] = parse_conc_raw(it.get("concentration", {}))
+    
+    ingredients = normalize_concentration_to_100(
+        ingredients,
+        treat_secret_range_as_variable=True
+    )
+
     
     if debug:
         print("[INFO] 후처리 완료")
