@@ -1,7 +1,7 @@
 # pdf 경로, 페이지, 좌표 입력하면 html 테이블 -> dict 형 row 추출
-import tabula
+import tabula.io as tabula_io
 import pandas as pd
-from typing import Tuple
+from typing import Tuple, List
 
 def _extract_cell_bboxes(tables_json: list) -> list:
     """
@@ -84,7 +84,7 @@ def _extract_json_formatted_table(pdf_path: str, tabula_bbox: Tuple[float, float
     Returns:
         Tuple[df: pd.DataFrame, bboxes: dict]: pandas DataFrame와 셀 박스 좌표 리스트의 2차원 배열
     """
-    tables_json = tabula.read_pdf(
+    tables_json = tabula_io.read_pdf(
         pdf_path,
         pages=page,
         area=tabula_bbox,
@@ -280,14 +280,14 @@ def preprocess_table(table: pd.DataFrame, cell_bboxes: list) -> Tuple[pd.DataFra
 def extract_tubla_table_with_bbox(pdf_path: str, bbox: Tuple[float, float, float, float], page: int, stream: bool = True) -> Tuple[pd.DataFrame, list]:
     """
     tabula-py를 사용하여 PDF에서 지정한 bbox 영역의 테이블을 추출합니다.
-    
+
     Args:
         pdf_path: PDF 파일 경로
         bbox: bounding box 좌표 [top, left, bottom, right] (포인트 단위)
               또는 [y1, x1, y2, x2] 형식
         page: 추출할 페이지 번호 (1부터 시작, 기본값: 1)
         stream: True면 stream 모드 사용 (기본값: True)
-    
+
     Returns:
         Tuple[df: DataFrame, cell_bboxes: list]: pandas DataFrame와 셀 박스 좌표 리스트의 2차원 배열
     """
@@ -300,6 +300,62 @@ def extract_tubla_table_with_bbox(pdf_path: str, bbox: Tuple[float, float, float
     df, cell_bboxes = _extract_json_formatted_table(pdf_path, tabula_bbox, page, stream)
 
     return df, cell_bboxes
+
+
+def extract_multiple_tables_batch(
+    pdf_path: str,
+    page: int,
+    bboxes: List[Tuple[float, float, float, float]],
+    stream: bool = True
+) -> List[Tuple[pd.DataFrame, list]]:
+    """
+    같은 페이지의 여러 테이블을 한 번에 추출 (PDF를 한 번만 로드)
+
+    Args:
+        pdf_path: PDF 파일 경로
+        page: 페이지 번호 (1부터 시작)
+        bboxes: 여러 bbox 리스트 [(l,t,r,b), (l,t,r,b), ...]
+        stream: True면 stream 모드 사용
+
+    Returns:
+        [(DataFrame, cell_bboxes), (DataFrame, cell_bboxes), ...]
+    """
+    # bbox를 tabula 형식으로 변환: (l,t,r,b) -> [t,l,b,r]
+    tabula_bboxes = []
+    for left, top, right, bottom in bboxes:
+        tabula_bboxes.append([top, left, bottom, right])
+
+    # 한 번에 여러 영역 추출
+    tables_json_list = tabula_io.read_pdf(
+        pdf_path,
+        pages=page,
+        area=tabula_bboxes,  # 리스트로 전달하면 여러 영역을 한 번에 처리
+        stream=stream,
+        output_format="json"
+    )
+
+    # 결과 파싱
+    # tabula가 여러 area를 처리하면 각 area마다 하나의 dict를 리스트로 반환
+    results = []
+
+    if not tables_json_list:
+        # 빈 결과: 모든 bbox에 대해 빈 DataFrame 반환
+        for _ in bboxes:
+            results.append((pd.DataFrame(), []))
+    else:
+        # tables_json_list가 리스트인 경우, 각 항목이 dict
+        for tables_json in tables_json_list:
+            # tables_json은 단일 dict 형태
+            if isinstance(tables_json, dict):
+                # dict를 리스트로 감싸서 _json_to_dataframe에 전달
+                df = _json_to_dataframe([tables_json])
+                cell_bboxes = _extract_cell_bboxes([tables_json])
+            else:
+                df = pd.DataFrame()
+                cell_bboxes = []
+            results.append((df, cell_bboxes))
+
+    return results
 
 
 
