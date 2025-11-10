@@ -419,8 +419,10 @@ class MarkdownChunker:
                     end_page = page_num
                     break
 
-            raw_chunk['page_num'] = list(range(start_page, end_page + 1))
-            raw_chunk['file_name'] = file_name
+            raw_chunk['file_info'] = {
+                'file_name': file_name,
+                'page_num': list(range(start_page, end_page + 1))
+            }
             raw_chunk.pop('start_index', None)
             raw_chunk.pop('end_index', None)
 
