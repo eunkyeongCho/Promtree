@@ -23,6 +23,7 @@ class MarkdownChunker:
         self.mongodb_client = get_mongodb_client()
         self.chunk_collection = self.mongodb_client["chunk_db"]["chunk_collection"]
 
+
     def get_pages_info(self, md: str) -> list:
         """
         마크다운 텍스트에서 각 페이지의 실제 내용의 시작과 끝 인덱스를 추출합니다.
@@ -63,6 +64,7 @@ class MarkdownChunker:
 
         return pages_info
 
+
     def remove_page(self, md: str) -> str:
         """
         마크다운 텍스트에서 '>>> page_0' 마커를 제거하고 그 만큼 공백으로 치환합니다.
@@ -83,6 +85,7 @@ class MarkdownChunker:
         md_without_page = page_pattern.sub(lambda m: " " * len(m.group(0)), md)
 
         return md_without_page
+
 
     def generate_image_chunk(self, md: str) -> dict[str, str | list[dict]]:
         """
@@ -123,6 +126,7 @@ class MarkdownChunker:
         }
         
         return image_dict
+
 
     def generate_link_chunk(self, md: str) -> dict[str, str | list[dict]]:
         """
@@ -176,6 +180,7 @@ class MarkdownChunker:
         
         return link_dict
 
+
     def generate_md_table_chunk(self, md: str) -> dict[str, str | list[dict]]:
         """
         마크다운 문자열에서 table에 해당하는 부분을 전부 공백으로 치환하고 table 타입 청크를 생성합니다.
@@ -228,6 +233,7 @@ class MarkdownChunker:
         }
             
         return table_dict
+
 
     def generate_html_table_chunk(self, md: str) -> dict[str, str | list[dict]]:
         """
@@ -472,6 +478,7 @@ class MarkdownChunker:
 
         return raw_chunks
 
+
     def save_chunks_to_db(self, chunks: list[dict]) -> bool:
         """
         완성된 청크들을 현재 사용 중인 Chunk DB에 저장합니다.
@@ -496,6 +503,7 @@ class MarkdownChunker:
             print(f"❌ Failed to save chunks")
             traceback.print_exc()
             return False
+
 
     def chunk_markdown_file(self, file_path: Path) -> bool:
         """
@@ -542,6 +550,7 @@ class MarkdownChunker:
             traceback.print_exc()
             return False
 
+
 def main():
     # 샘플로 사용할 markdown data 불러오기
     # 현재는 프로젝트 내부에 있는 샘플 데이터 폴더에서 불러옵니다.
@@ -556,6 +565,7 @@ def main():
 
         if is_chunking_succeeded:
             print(f"🎉 Chunking succeeded for {file_path.name}")
+
 
 if __name__ == "__main__":
     main()
