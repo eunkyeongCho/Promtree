@@ -144,7 +144,7 @@ class ElasticSearchIndexer:
                                 {"match": {"metadata": query}}
                             ],
                             "filter": [
-                                {"term": {"type": "image"}}
+                                {"term": {"type": ["image", "link"]}}
                             ]
                         }
                     }
