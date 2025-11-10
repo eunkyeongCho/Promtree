@@ -7,8 +7,8 @@ from db.elasticsearch.elasticsearch import get_elasticsearch_client
 
 class ElasticSearchIndexer:
     def __init__(self):
-        self.mongo_client = get_mongodb_client()
-        self.es_client = get_elasticsearch_client()
+        self.mongodb_client = get_mongodb_client()
+        self.elasticsearch_client = get_elasticsearch_client()
         self.chunk_collection = self.mongo_client["chunk_db"]["chunk_collection"]
 
 
@@ -23,7 +23,7 @@ class ElasticSearchIndexer:
 
         Args:
             file_name (str): 색인할 원본 문서의 파일 이름.
-            index_name (str): 색인이 저장될 Elasticsearch 인덱스 이름.
+            index_name (str): 색인이 저장될 Elasticsearch 인덱스 이름. (화면에서부터 사용자가 MSDS/TDS 선택하기로 했으므로 index_name을 넘겨줄 수 있을 것으로 판단함. index_name은 소문자로 msds or tds)
 
         Returns:
             bool: 색인 작업이 성공적으로 완료되면 True, 
@@ -46,13 +46,13 @@ class ElasticSearchIndexer:
 
         # 청크가 존재한다면 인덱싱 진행
         # action은 공식문서의 표현이어서 따름
-        # 인덱싱할 데이터를 모두 메모리에 올리지 않고, generator를 통해 데이터를 하나씩 흘려보내는 것이 공식문서에서 권장하는 방식이므로 따름
+        # 인덱싱할 데이터를 모두 메모리에 올리지 않고, generator를 통해 데이터를 하나씩 흘려보내는 것이 Elasticsearch 공식문서에서 권장하는 방식이므로 따름
         def generate_actions():
             # 첫 문서부터 처리
             yield {
                 "_op_type": "index",
                 "_index": index_name,
-                "_id": str(first_chunk["_id"]),
+                "_id": str(first_chunk["_id"]), # MongoDB의 _id 값을 그대로 Elasticsearch의 _id 값으로 사용
                 "_source": {
                     "type": first_chunk.get("type", ""),
                     "content": first_chunk.get("content", ""),
@@ -76,7 +76,7 @@ class ElasticSearchIndexer:
                 }
 
         try:
-            (success_count, errors) = helpers.bulk(self.es_client, generate_actions())
+            (success_count, errors) = helpers.bulk(self.elasticsearch_client, generate_actions())
 
         except Exception as e:
             print(f"❌ Error indexing chunks: {e}")
@@ -96,36 +96,88 @@ class ElasticSearchIndexer:
         return True
 
 
-    def search(self, query: str, index_name: str, size: int = 10) -> List[Dict[str, Any]]:
+    def build_query(query: str, chunk_type: str) -> dict:
+
+        if(chunk_type == "text" or chunk_type == "table"):
+            search_field = "content"
+        elif(chunk_type == "image"):
+            search_field = "metadata"
+
+        return {
+            "bool": {
+                "must": [
+                    {"match": {search_field: query}}
+                ],
+                "filter": [
+                    {"term": {"type": chunk_type}}
+                ]
+            }
+        }
+
+
+    def search(self, query: str, index_name: list[str], size: int = 10) -> List[Dict[str, Any]]:
         """
         Elasticsearch에서 query로 검색
         """
-        print(f"\n🔎 Searching index: {index_name} | query: {query}")
+        elasticsearch_query = {
+            "bool": {
+                "should": [
+                    {
+                        "bool": {
+                            "must": [
+                                {"match": {"content": query}}
+                            ],
+                            "filter": [
+                                {"terms": {"type": ["text", "table"]}}
+                            ]
+                        }
+                    },
+                    {
+                        "bool": {
+                            "must": [
+                                {"match": {"metadata": query}}
+                            ],
+                            "filter": [
+                                {"term": {"type": "image"}}
+                            ]
+                        }
+                    }
+                ],
+                "minimum_should_match": 1
+            }
+        }
 
-        response = self.es_client.search(
+        response  = self.elasticsearch_client.search(
             index=index_name,
             size=size,
-            query={
-                "multi_match": {
-                    "query": query,
-                    "fields": ["content", "metadata"]   # 둘 다 검색
-                }
-            }
+            query=elasticsearch_query
         )
 
         hits = response["hits"]["hits"]
 
-        # 결과 데이터를 깔끔하게 정리
+        scored_results = sorted(
+            [
+                {
+                    "score": hit["_score"],
+                    "type": hit["_source"].get("type"),
+                    "content": hit["_source"].get("content"),
+                    "metadata": hit["_source"].get("metadata"),
+                    "file_info": hit["_source"].get("file_info")
+                }
+                for hit in hits
+            ],
+            key=lambda result: result["score"],
+            reverse=True
+        )
+
         results = [
             {
-                "score": hit["_score"],
-                "type": hit["_source"].get("type"),
-                "content": hit["_source"].get("content"),
-                "metadata": hit["_source"].get("metadata"),
-                "file_name": hit["_source"].get("file_info", {}).get("file_name"),
-                "page_num": hit["_source"].get("file_info", {}).get("page_num"),
+                "type": scored_result["type"],
+                "content": scored_result["content"],
+                "metadata": scored_result["metadata"],
+                "file_info": scored_result["file_info"]
             }
-            for hit in hits
+            for scored_result in scored_results
         ]
 
         print(f"✅ Found {len(results)} results")
