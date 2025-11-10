@@ -1,18 +1,16 @@
-# DB
 from db.mongodb import get_mongodb_client
-
-# 텍스트 전처리
-import re
-from urlextract import URLExtract
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# 예외처리
+import re
+from urlextract import URLExtract
 import traceback
-
-# 기타
 from dotenv import load_dotenv
 from pathlib import Path
+import json
 
+from retriever.chunker.html2row import parse_table
+
+load_dotenv()
 
 class MarkdownChunker:
     """
@@ -96,7 +94,7 @@ class MarkdownChunker:
         Returns:
             dict: 다음 두 개의 key를 포함한 딕셔너리
                 - md_without_image(str): 모든 이미지가 공백으로 치환된 마크다운 문자열
-                - image_raw_chunks(list[dict]): image 타입 raw 청크 리스트 (file_name, page_num 키 생성 전)
+                - image_raw_chunks(list[dict]): image 타입 raw 청크 리스트 (file_info 키 생성 전)
         """
 
         # image 정규식
@@ -136,7 +134,7 @@ class MarkdownChunker:
         Returns:
             dict: 다음 두 개의 key를 포함한 딕셔너리
                 - md_without_link(str): 모든 링크가 공백으로 치환된 마크다운 문자열
-                - link_raw_chunks(list[dict]): link 타입 청크 리스트 (file_name, page_num 키 생성 전)
+                - link_raw_chunks(list[dict]): link 타입 청크 리스트 (file_info 키 생성 전)
         """
 
         # link 찾기
@@ -155,17 +153,17 @@ class MarkdownChunker:
                 link_end = link_match.end()
 
                 # link에 대한 metadata로 쓸 문맥 추출
-                context_start = max(0, link_start - 100)
-                context_end = min(len(md), link_end + 100)
-                context_snippet = md[context_start:link_start] + md[link_end:context_end]
+                content_start = max(0, link_start - 100)
+                content_end = min(len(md), link_end + 100)
+                content_snippet = md[content_start:link_start] + md[link_end:content_end]
 
                 # 청크로 만들어서 link_raw_chunks 배열에 저장
                 link_raw_chunks.append({
                     "type": "link",
                     "content": link,
-                    "metadata": context_snippet,
-                    "start_index": context_start, # page_num 만드는 함수 통과하면서 없어질 키
-                    "end_index": context_end # 이것도 마찬가지
+                    "metadata": content_snippet,
+                    "start_index": content_start, # page_num 만드는 함수 통과하면서 없어질 키
+                    "end_index": content_end # 이것도 마찬가지
                 })
 
             # link 부분 공백으로 치환 (이전 루프의 link가 제거된 md가 다음 루프로 전달됨)
@@ -178,7 +176,7 @@ class MarkdownChunker:
         
         return link_dict
 
-    def generate_table_chunk(self, md: str) -> dict[str, str | list[dict]]:
+    def generate_md_table_chunk(self, md: str) -> dict[str, str | list[dict]]:
         """
         마크다운 문자열에서 table에 해당하는 부분을 전부 공백으로 치환하고 table 타입 청크를 생성합니다.
         같은 파일 내에 table이 여러개 있는 경우 각 table 별로 청크를 생성합니다.
@@ -230,6 +228,52 @@ class MarkdownChunker:
         }
             
         return table_dict
+
+    def generate_html_table_chunk(self, md: str) -> dict[str, str | list[dict]]:
+        """
+        마크다운 문자열에서 table에 해당하는 부분을 전부 공백으로 치환하고 table 타입 청크를 생성합니다.
+
+        Args:
+            md(str): link가 제거된 마크다운 문자열
+
+        Returns:
+            dict: 다음 두 개의 key를 포함한 딕셔너리
+                - md_without_html_table(str): 모든 html 표가 공백으로 치환된 마크다운 문자열
+                - table_raw_chunks(list[dict]): table 타입 청크 리스트 (file_info 키 생성 전)
+        """
+        
+        html_table_pattern = re.compile(
+            r"<table>.*?</table>",
+            re.IGNORECASE | re.DOTALL
+        )
+
+        html_table_raw_chunks = []
+
+        for html_table_match in re.finditer(html_table_pattern, md):
+            html_table_str = html_table_match.group(0)
+            content_start = html_table_match.start()
+            content_end = html_table_match.end() - 1
+
+            html_to_dict_rows = parse_table(html_table_str)
+            html_to_json = json.dumps(html_to_dict_rows, ensure_ascii=False)
+
+            html_table_raw_chunks.append({
+                "type": "table",
+                "content": html_to_json,
+                "start_index": content_start,
+                "end_index": content_end
+            })
+
+        # table 부분 공백으로 치환
+        md = html_table_pattern.sub(lambda m: " " * len(m.group(0)), md)
+
+        html_table_dict = {
+            "md_without_html_table": md,
+            "html_table_raw_chunks": html_table_raw_chunks
+        }
+            
+        return html_table_dict
+
 
     def generate_text_chunk(self, md: str) -> list:
         """
@@ -482,11 +526,11 @@ class MarkdownChunker:
                 md_without_link = link_dict['md_without_link']
                 raw_chunks = link_dict['link_raw_chunks'].copy()
 
-                # table_dict = generate_table_chunk(md_without_link) # table 타입 처리
-                # md_without_table = table_dict['md_without_table']
-                # raw_chunks.extend(table_dict['table_raw_chunks'])
+                html_table_dict = self.generate_html_table_chunk(md_without_link) # table 타입 처리
+                md_without_html_table = html_table_dict['md_without_html_table']
+                raw_chunks.extend(html_table_dict['html_table_raw_chunks'])
 
-                text_raw_chunks = self.generate_text_chunk(md_without_link) # text 타입 처리
+                text_raw_chunks = self.generate_text_chunk(md_without_html_table) # text 타입 처리
                 raw_chunks.extend(text_raw_chunks)
 
                 chunks = self.attach_page_num_and_file_name(raw_chunks, pages_info, file_path.stem) # raw chunks에 page_num, file_name 추가
@@ -498,17 +542,20 @@ class MarkdownChunker:
             traceback.print_exc()
             return False
 
-    if __name__ == "__main__":
+def main():
+    # 샘플로 사용할 markdown data 불러오기
+    # 현재는 프로젝트 내부에 있는 샘플 데이터 폴더에서 불러옵니다.
+    BASE_DIR = Path(__file__).resolve().parents[1] # 현재폴더의 경로
+    markdown_sample_data_folder_path = BASE_DIR / "markdown_sample_data" # 샘플로 쓸 markdown 데이터 폴더의 경로
 
-        # 샘플로 사용할 markdown data 불러오기
-        # 현재는 프로젝트 내부에 있는 샘플 데이터 폴더에서 불러옵니다.
+    chunker = MarkdownChunker()
 
-        BASE_DIR = Path(__file__).resolve().parent # 현재폴더의 경로
-        markdown_sample_data_folder_path = BASE_DIR / "markdown_sample_data" # 샘플로 쓸 markdown 데이터 폴더의 경로
+    for file_path in markdown_sample_data_folder_path.rglob("*.md"): # md 파일만 순회돌기
 
-        for file_path in markdown_sample_data_folder_path.rglob("*.md"): # md 파일만 순회돌기
+        is_chunking_succeeded = chunker.chunk_markdown_file(file_path)
 
-            is_chunking_succeeded = chunk_markdown_file(file_path)
+        if is_chunking_succeeded:
+            print(f"🎉 Chunking succeeded for {file_path.name}")
 
-            if is_chunking_succeeded:
-                print(f"🎉 Chunking succeeded for {file_path.name}")
+if __name__ == "__main__":
+    main()
