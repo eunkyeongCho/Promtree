@@ -13,8 +13,28 @@ class ElasticSearchIndexer:
 
 
     def index_file(self, file_name: str, index_name: str) -> bool:
+        """
+        MongoDB에 저장된 청킹(chunk) 데이터를 Elasticsearch에 색인하는 함수.
 
-        # MongoDB에서 문서 가져오기
+        주어진 `file_name` 을 기준으로 MongoDB의 chunk_collection 에서 문서 조각들을
+        조회한 뒤, Elasticsearch의 `index_name` 인덱스로 bulk API를 이용해 일괄 색인한다.
+        이 때 MongoDB의 `_id` 값을 그대로 Elasticsearch 문서 `_id` 로 사용하여
+        중복 색인을 방지하고, 동일 문서가 재색인될 경우 덮어쓰기(upsert)되도록 한다.
+
+        Args:
+            file_name (str): 색인할 원본 문서의 파일 이름.
+            index_name (str): 색인이 저장될 Elasticsearch 인덱스 이름.
+
+        Returns:
+            bool: 색인 작업이 성공적으로 완료되면 True, 
+                청킹 데이터가 없거나 색인 과정에서 오류가 발생하면 False.
+
+        Notes:
+            - generator 방식으로 bulk 요청을 처리하여 대량 데이터에도 메모리 안전함.
+            - 색인 개수와 에러 개수는 함수 내부에서 로그로 출력됨.
+        """
+
+        # MongoDB에서 청크들 가져오기
         chunks = self.chunk_collection.find({"file_info.file_name": file_name})
 
         # 청크 데이터를 모두 메모리에 올리면 비효율적이므로, 첫번째 청크 데이터를 기준으로 청크 존재여부 확인

@@ -12,5 +12,5 @@ PORT = int(os.getenv("MONGO_PORT", 27017))
 
 _MONGO_CLIENT = MongoClient(f"mongodb://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/")
 
-def get_mongo_client():
+def get_mongodb_client():
     return _MONGO_CLIENT
