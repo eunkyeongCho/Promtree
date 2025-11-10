@@ -6,32 +6,33 @@ from db.elasticsearch.elasticsearch import get_elasticsearch_client
 
 
 class ElasticSearchIndexer:
+    """
+    MongoDB에서 생성된 청킹(chunk) 데이터를 Elasticsearch에 색인(indexing)하고, 저장된 데이터를 검색(query)할 수 있는 클래스입니다.
+    """
     def __init__(self):
+        """
+        MongoDB 및 Elasticsearch 클라이언트의 싱글톤 객체를 얻고, 청킹 데이터가 저장된 MongoDB 컬렉션을 변수에 할당합니다.
+        """
         self.mongodb_client = get_mongodb_client()
         self.elasticsearch_client = get_elasticsearch_client()
-        self.chunk_collection = self.mongo_client["chunk_db"]["chunk_collection"]
+        self.chunk_collection = self.mongodb_client["chunk_db"]["chunk_collection"]
 
 
     def index_file(self, file_name: str, index_name: str) -> bool:
         """
-        MongoDB에 저장된 청킹(chunk) 데이터를 Elasticsearch에 색인하는 함수.
-
-        주어진 `file_name` 을 기준으로 MongoDB의 chunk_collection 에서 문서 조각들을
-        조회한 뒤, Elasticsearch의 `index_name` 인덱스로 bulk API를 이용해 일괄 색인한다.
-        이 때 MongoDB의 `_id` 값을 그대로 Elasticsearch 문서 `_id` 로 사용하여
-        중복 색인을 방지하고, 동일 문서가 재색인될 경우 덮어쓰기(upsert)되도록 한다.
+        MongoDB에 저장된 특정 파일의 청킹(chunk) 데이터를 Elasticsearch 인덱스에 일괄 색인합니다.
 
         Args:
-            file_name (str): 색인할 원본 문서의 파일 이름.
-            index_name (str): 색인이 저장될 Elasticsearch 인덱스 이름. (화면에서부터 사용자가 MSDS/TDS 선택하기로 했으므로 index_name을 넘겨줄 수 있을 것으로 판단함. index_name은 소문자로 msds or tds)
+            file_name (str):
+                색인 대상 원본 파일 이름
+            index_name (str):
+                색인이 저장될 Elasticsearch 인덱스 이름(msds, tds 둘 중 하나)
+                화면에서부터 사용자가 PDF를 업로드할 MSDS/TDS 선택하기로 했으므로 index_name을 넘겨줄 수 있을 것으로 판단함.
 
         Returns:
-            bool: 색인 작업이 성공적으로 완료되면 True, 
-                청킹 데이터가 없거나 색인 과정에서 오류가 발생하면 False.
-
-        Notes:
-            - generator 방식으로 bulk 요청을 처리하여 대량 데이터에도 메모리 안전함.
-            - 색인 개수와 에러 개수는 함수 내부에서 로그로 출력됨.
+            bool:
+                - 색인이 정상적으로 수행되면 True
+                - 파일에 대응하는 청킹 데이터가 없거나 색인 중 오류가 발생하면 False
         """
 
         # MongoDB에서 청크들 가져오기
@@ -96,29 +97,34 @@ class ElasticSearchIndexer:
         return True
 
 
-    def build_query(query: str, chunk_type: str) -> dict:
-
-        if(chunk_type == "text" or chunk_type == "table"):
-            search_field = "content"
-        elif(chunk_type == "image"):
-            search_field = "metadata"
-
-        return {
-            "bool": {
-                "must": [
-                    {"match": {search_field: query}}
-                ],
-                "filter": [
-                    {"term": {"type": chunk_type}}
-                ]
-            }
-        }
-
-
-    def search(self, query: str, index_name: list[str], size: int = 10) -> List[Dict[str, Any]]:
+    def keyword_search(self, query: str, index_name: list[str]) -> List[Dict[str, Any]]:
         """
-        Elasticsearch에서 query로 검색
+        Elasticsearch에서 검색어(query)에 따라 청크를 검색합니다.
+
+        문서의 type 값에 따라 검색 기준 필드를 자동으로 구분:
+            - type = text or table → content 필드에서 검색
+            - type = image → metadata 필드에서 검색
+
+        Args:
+            query (str): 사용자의 query
+            index_name (list[str]): 검색을 수행할 Elasticsearch 인덱스 목록
+
+        Returns:
+            List[Dict[str, Any]]:
+                검색된 문서 목록. 각 문서는 다음 구조를 가진다:
+                {
+                    "type": str,
+                    "content": str | None,
+                    "metadata": str | None,
+                    "file_info": {
+                        "file_name": str,
+                        "page_num": list[int]
+                    }
+                }
         """
+
+        RETURN_SIZE = 10 # 반환할 청크 수
+
         elasticsearch_query = {
             "bool": {
                 "should": [
@@ -149,7 +155,7 @@ class ElasticSearchIndexer:
 
         response  = self.elasticsearch_client.search(
             index=index_name,
-            size=size,
+            size=RETURN_SIZE,
             query=elasticsearch_query
         )
 
