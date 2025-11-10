@@ -383,6 +383,7 @@ def main():
 ║  2. Start Docker containers                              ║
 ║  3. Initialize MongoDB                                   ║
 ║  4. Initialize PostgreSQL                                ║
+║  5. Initialize Elasticsearch                             ║
 ╚══════════════════════════════════════════════════════════╝
     """)
 

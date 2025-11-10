@@ -1,8 +1,12 @@
-import os
 from pymongo import MongoClient
+
+import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parents[1]  # root 경로
+load_dotenv(BASE_DIR / "common" / ".env")
 
 # --- 싱글톤 MongoClient 인스턴스 생성 ---
 USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME", "root")
