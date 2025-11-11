@@ -4,7 +4,7 @@
 """
 
 from bs4 import BeautifulSoup
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict
 import json
 import re
 
