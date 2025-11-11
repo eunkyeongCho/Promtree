@@ -9,6 +9,7 @@ import sys
 import subprocess
 import time
 from pathlib import Path
+from elasticsearch import Elasticsearch
 
 # Import database libraries (will be installed if not present)
 try:
@@ -56,16 +57,16 @@ def run_command(command: list, description: str) -> bool:
 
 
 def install_dependencies() -> bool:
-    """Install Python dependencies using uv (pyproject.toml + uv.lock)."""
-    pyproject = Path("pyproject.toml")
+    """Install Python dependencies from requirements.txt."""
+    requirements_file = Path("requirements.txt")
 
-    if not pyproject.exists():
-        print("⚠️  pyproject.toml not found. Skipping dependency installation.")
+    if not requirements_file.exists():
+        print("⚠️  requirements.txt not found. Skipping dependency installation.")
         return True
 
     return run_command(
-        ["uv", "sync"],
-        "Syncing dependencies with uv"
+        [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+        "Installing Python dependencies"
     )
 
 
@@ -310,67 +311,71 @@ def initialize_postgresql() -> bool:
         print(f"❌ PostgreSQL initialization failed: {e}")
         return False
 
-def initialize_elasticsearch() -> bool:
-    """Initialize Elasticsearch connection and ensure base index exists."""
-    from db.elasticsearch.elasticsearch import get_elasticsearch_client
+# def initialize_elasticsearch() -> bool:
+#     """Initialize Elasticsearch connection and ensure base index exists."""
 
-    print(f"\n{'='*60}")
-    print(f"🔎 Initializing Elasticsearch")
-    print(f"{'='*60}")
+#     print(f"\n{'='*60}")
+#     print(f"🔎 Initializing Elasticsearch")
+#     print(f"{'='*60}")
 
-    elasticsearch_client = get_elasticsearch_client()
+#     ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD")
 
-    try:
-        elastic_client_info = elasticsearch_client.info()
-        if(elastic_client_info):
-            print("✅ Elasticsearch 연결 성공")
-        else:
-            print("❌ Elasticsearch 연결 실패")
-            return False
-    except Exception as e:  
-        print(f"❌ Elasticsearch 연결 테스트 실패: {e}")
-        return False
+#     elasticsearch_client = Elasticsearch(
+#         "http://localhost:9200",
+#         basic_auth=("elastic", ELASTIC_PASSWORD)
+#     )
 
-    # 인덱스 만들 때 사용할 매핑
-    mappings={
-        "properties": {
-            "type": { "type": "keyword" },
-            "content": { "type": "text" },
-            "metadata": { "type": "text" },
-            "file_info": {
-                "properties": {
-                "file_name": { "type": "keyword" },
-                "page_num":   { "type": "integer" }
-                }
-            }
-        }
-    }
+#     try:
+#         elastic_client_info = elasticsearch_client.info()
+#         if(elastic_client_info):
+#             print("✅ Elasticsearch 연결 성공")
+#         else:
+#             print("❌ Elasticsearch 연결 실패")
+#             return False
+#     except Exception as e:  
+#         print(f"❌ Elasticsearch 연결 테스트 실패: {e}")
+#         return False
 
-    # 인덱스 만들 때 사용할 설정
-    settings = {
-        "index": {
-            "number_of_shards": 1,
-            "number_of_replicas": 0
-        }
-    }
+#     # 인덱스 만들 때 사용할 매핑
+#     mappings={
+#         "properties": {
+#             "type": { "type": "keyword" },
+#             "content": { "type": "text" },
+#             "metadata": { "type": "text" },
+#             "file_info": {
+#                 "properties": {
+#                 "file_name": { "type": "keyword" },
+#                 "page_num":   { "type": "integer" }
+#                 }
+#             }
+#         }
+#     }
 
-    # 인덱스 있으면 바로 리턴하고, 없으면 생성
-    msds_exists = elasticsearch_client.indices.exists(index="msds")
-    tds_exists = elasticsearch_client.indices.exists(index="tds")
+#     # 인덱스 만들 때 사용할 설정
+#     settings = {
+#         "index": {
+#             "number_of_shards": 1,
+#             "number_of_replicas": 0
+#         }
+#     }
 
-    if msds_exists and tds_exists:
-        print("✅ MSDS and TDS indices already exist")
-        return True
+#     # 인덱스 있으면 바로 리턴하고, 없으면 생성
+#     msds_exists = elasticsearch_client.indices.exists(index="msds")
+#     tds_exists = elasticsearch_client.indices.exists(index="tds")
 
-    if not elasticsearch_client.indices.exists(index="msds"):
-        print(f"📦 Creating index: msds")
-        elasticsearch_client.indices.create(index="msds", mappings=mappings, settings=settings)
+#     if msds_exists and tds_exists:
+#         print("✅ MSDS and TDS indices already exist")
+#         return True
 
-    if not elasticsearch_client.indices.exists(index="tds"):
-        print(f"📦 Creating index: tds")
-        elasticsearch_client.indices.create(index="tds", mappings=mappings, settings=settings)
+#     if not elasticsearch_client.indices.exists(index="msds"):
+#         print(f"📦 Creating index: msds")
+#         elasticsearch_client.indices.create(index="msds", mappings=mappings, settings=settings)
 
-    return True
+#     if not elasticsearch_client.indices.exists(index="tds"):
+#         print(f"📦 Creating index: tds")
+#         elasticsearch_client.indices.create(index="tds", mappings=mappings, settings=settings)
+
+#     return True
 
 def main():
     """Main initialization function."""
@@ -412,10 +417,10 @@ def main():
         print("⚠️  Failed to initialize PostgreSQL")
         success = False
 
-    # Step 5: Initialize Elasticsearch
-    if not initialize_elasticsearch():
-        print("⚠️  Failed to initialize Elasticsearch")
-        success = False
+    # # Step 5: Initialize Elasticsearch
+    # if not initialize_elasticsearch():
+    #     print("⚠️  Failed to initialize Elasticsearch")
+    #     success = False
 
     # Final status
     print(f"\n{'='*60}")
