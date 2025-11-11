@@ -1,7 +1,7 @@
 services:
   mongodb:
     image: mongodb/mongodb-community-server:8.0-ubuntu2204
-    container_name: mongodb
+    container_name: t_mongodb
     restart: always
     ports:
       - ${MONGO_PORT}:27017
@@ -34,23 +34,70 @@ services:
     ports:
       - ${ADMINER_PORT}:8080
 
-  neo4j:
-    image: neo4j:5.26.16
-    container_name: neo4j
-    restart: always
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
+    container_name: elasticsearch
     ports:
-      - 7474:7474
-      - 7687:7687
+      - "9200:9200"
     environment:
-      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
-      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - cluster.name=${CLUSTER_NAME}
+      - ELASTIC_USERNAME=elastic
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
     volumes:
-      - "neo4j_data:/usr/share/neo4j/data:z"
+      - "elasticsearch_data:/usr/share/elasticsearch/data:z"
+      - "./db/elasticsearch/jvm.options.d:/usr/share/elasticsearch/config/jvm.options.d:z"
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.2.0
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=true
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - xpack.fleet.enabled=false
+      - xpack.fleet.agents.enabled=false
+      - xpack.fleet.packages.enabled=false
+      - xpack.synthetics.enabled=false
+    volumes:
+      - "kibana_data:/usr/share/kibana/data:z"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  neo4j:
+  image: neo4j:5.26.16
+  container_name: neo4j
+  restart: always
+  ports:
+    - 7474:7474
+    - 7687:7687
+  environment:
+    - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+  volumes:
+    - "neo4j_data:/usr/share/neo4j/data:z"
+  healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7474"]
       interval: 10s
       timeout: 10s
       retries: 120
 
 volumes:
+  elasticsearch_data:
+  kibana_data:
   neo4j_data:
