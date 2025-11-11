@@ -97,17 +97,18 @@ class ElasticSearchIndexer:
         return True
 
 
-    def keyword_search(self, query: str, index_name: list[str]) -> List[Dict[str, Any]]:
+    def keyword_search(self, query: str, index_names: list[str]) -> List[Dict[str, Any]]:
         """
         Elasticsearch에서 검색어(query)에 따라 청크를 검색합니다.
-
-        문서의 type 값에 따라 검색 기준 필드를 자동으로 구분:
+        청크의 type 값에 따라 검색 기준 필드가 달라집니다.
             - type = text or table → content 필드에서 검색
-            - type = image → metadata 필드에서 검색
+            - type = image or link → metadata 필드에서 검색
+        
+        index_names가 여러개인 경우, 모든 인덱스에 대해 RETURN_SIZE만큼의 청크를 검색한 후 상위 RETURN_SIZE개의 청크를 반환합니다.
 
         Args:
             query (str): 사용자의 query
-            index_name (list[str]): 검색을 수행할 Elasticsearch 인덱스 목록
+            index_names (list[str]): 검색을 수행할 Elasticsearch 인덱스 목록 (검색창에서 @로 태그하는 것)
 
         Returns:
             List[Dict[str, Any]]:
@@ -122,8 +123,6 @@ class ElasticSearchIndexer:
                     }
                 }
         """
-
-        RETURN_SIZE = 10 # 반환할 청크 수
 
         elasticsearch_query = {
             "bool": {
@@ -144,7 +143,7 @@ class ElasticSearchIndexer:
                                 {"match": {"metadata": query}}
                             ],
                             "filter": [
-                                {"term": {"type": ["image", "link"]}}
+                                {"terms": {"type": ["image", "link"]}}
                             ]
                         }
                     }
@@ -153,13 +152,16 @@ class ElasticSearchIndexer:
             }
         }
 
-        response  = self.elasticsearch_client.search(
-            index=index_name,
-            size=RETURN_SIZE,
-            query=elasticsearch_query
-        )
+        RETURN_SIZE = 10 # 반환할 청크 수
+        all_hits = []
 
-        hits = response["hits"]["hits"]
+        for index_name in index_names:
+            response = self.elasticsearch_client.search(
+                index=index_name,
+                size=RETURN_SIZE,
+                query=elasticsearch_query
+            )
+            all_hits.extend(response["hits"]["hits"])
 
         scored_results = sorted(
             [
@@ -170,11 +172,13 @@ class ElasticSearchIndexer:
                     "metadata": hit["_source"].get("metadata"),
                     "file_info": hit["_source"].get("file_info")
                 }
-                for hit in hits
+                for hit in all_hits
             ],
             key=lambda result: result["score"],
             reverse=True
         )
+
+        scored_results = scored_results[:RETURN_SIZE]
 
         results = [
             {
@@ -187,4 +191,30 @@ class ElasticSearchIndexer:
         ]
 
         print(f"✅ Found {len(results)} results")
+
+        for i, r in enumerate(results, start=1):
+            print(f"--- Result {i} (score: {scored_results[i-1]['score']:.4f}) ---")
+            print(f"Type: {r['type']}")
+            print(f"File: {r['file_info'].get('file_name')} | Page: {r['file_info'].get('page_num')}")
+            if r['type'] in ["text", "table"]:
+                print(f"Content: {r['content'][:200]}...")  # 길면 앞 200자만 출력
+            else:
+                print(f"Metadata: {r['metadata']}")
+            print()
+
         return results
+
+
+def main():
+    """
+    ElasticsearchIndexer를 통해 키워드 검색을 테스트하는 코드입니다.
+    먼저 테스트하고 싶은 md 문서의 청킹을 완료한 후에 실행해주세요.
+    """
+    indexer = ElasticSearchIndexer()
+
+    indexer.index_file("000000002914_AU_EN", "msds")
+    indexer.keyword_search("Triethylene Glycol의 cas번호", ["msds"])
+
+
+if __name__ == "__main__":
+    main()
