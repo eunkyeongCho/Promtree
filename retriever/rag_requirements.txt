@@ -12,6 +12,9 @@ beautifulsoup4==4.14.2
 pymongo==4.15.3
 dnspython==2.8.0
 
+# Elasticsearch
+elasticsearch==9.2.0
+
 # ===== RAG & Vector Store =====
 # Vector Search
 faiss-cpu==1.12.0

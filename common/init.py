@@ -310,67 +310,67 @@ def initialize_postgresql() -> bool:
         print(f"❌ PostgreSQL initialization failed: {e}")
         return False
 
-# def initialize_elasticsearch() -> bool:
-#     """Initialize Elasticsearch connection and ensure base index exists."""
-#     from db.elasticsearch.elasticsearch import get_elasticsearch_client
+def initialize_elasticsearch() -> bool:
+    """Initialize Elasticsearch connection and ensure base index exists."""
+    from db.elasticsearch.elasticsearch import get_elasticsearch_client
 
-#     print(f"\n{'='*60}")
-#     print(f"🔎 Initializing Elasticsearch")
-#     print(f"{'='*60}")
+    print(f"\n{'='*60}")
+    print(f"🔎 Initializing Elasticsearch")
+    print(f"{'='*60}")
 
-#     elasticsearch_client = get_elasticsearch_client()
+    elasticsearch_client = get_elasticsearch_client()
 
-#     try:
-#         elastic_client_info = elasticsearch_client.info()
-#         if(elastic_client_info):
-#             print("✅ Elasticsearch 연결 성공")
-#         else:
-#             print("❌ Elasticsearch 연결 실패")
-#             return False
-#     except Exception as e:  
-#         print(f"❌ Elasticsearch 연결 테스트 실패: {e}")
-#         return False
+    try:
+        elastic_client_info = elasticsearch_client.info()
+        if(elastic_client_info):
+            print("✅ Elasticsearch 연결 성공")
+        else:
+            print("❌ Elasticsearch 연결 실패")
+            return False
+    except Exception as e:  
+        print(f"❌ Elasticsearch 연결 테스트 실패: {e}")
+        return False
 
-#     # 인덱스 만들 때 사용할 매핑
-#     mappings={
-#         "properties": {
-#             "type": { "type": "keyword" },
-#             "content": { "type": "text" },
-#             "metadata": { "type": "text" },
-#             "file_info": {
-#                 "properties": {
-#                 "file_name": { "type": "keyword" },
-#                 "page_num":   { "type": "integer" }
-#                 }
-#             }
-#         }
-#     }
+    # 인덱스 만들 때 사용할 매핑
+    mappings={
+        "properties": {
+            "type": { "type": "keyword" },
+            "content": { "type": "text" },
+            "metadata": { "type": "text" },
+            "file_info": {
+                "properties": {
+                "file_name": { "type": "keyword" },
+                "page_num":   { "type": "integer" }
+                }
+            }
+        }
+    }
 
-#     # 인덱스 만들 때 사용할 설정
-#     settings = {
-#         "index": {
-#             "number_of_shards": 1,
-#             "number_of_replicas": 0
-#         }
-#     }
+    # 인덱스 만들 때 사용할 설정
+    settings = {
+        "index": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0
+        }
+    }
 
-#     # 인덱스 있으면 바로 리턴하고, 없으면 생성
-#     msds_exists = elasticsearch_client.indices.exists(index="msds")
-#     tds_exists = elasticsearch_client.indices.exists(index="tds")
+    # 인덱스 있으면 바로 리턴하고, 없으면 생성
+    msds_exists = elasticsearch_client.indices.exists(index="msds")
+    tds_exists = elasticsearch_client.indices.exists(index="tds")
 
-#     if msds_exists and tds_exists:
-#         print("✅ MSDS and TDS indices already exist")
-#         return True
+    if msds_exists and tds_exists:
+        print("✅ MSDS and TDS indices already exist")
+        return True
 
-#     if not elasticsearch_client.indices.exists(index="msds"):
-#         print(f"📦 Creating index: msds")
-#         elasticsearch_client.indices.create(index="msds", mappings=mappings, settings=settings)
+    if not elasticsearch_client.indices.exists(index="msds"):
+        print(f"📦 Creating index: msds")
+        elasticsearch_client.indices.create(index="msds", mappings=mappings, settings=settings)
 
-#     if not elasticsearch_client.indices.exists(index="tds"):
-#         print(f"📦 Creating index: tds")
-#         elasticsearch_client.indices.create(index="tds", mappings=mappings, settings=settings)
+    if not elasticsearch_client.indices.exists(index="tds"):
+        print(f"📦 Creating index: tds")
+        elasticsearch_client.indices.create(index="tds", mappings=mappings, settings=settings)
 
-#     return True
+    return True
 
 def main():
     """Main initialization function."""
@@ -383,6 +383,7 @@ def main():
 ║  2. Start Docker containers                              ║
 ║  3. Initialize MongoDB                                   ║
 ║  4. Initialize PostgreSQL                                ║
+║  5. Initialize Elasticsearch                             ║
 ╚══════════════════════════════════════════════════════════╝
     """)
 
@@ -411,10 +412,10 @@ def main():
         print("⚠️  Failed to initialize PostgreSQL")
         success = False
 
-    # # Step 5: Initialize Elasticsearch
-    # if not initialize_elasticsearch():
-    #     print("⚠️  Failed to initialize Elasticsearch")
-    #     success = False
+    # Step 5: Initialize Elasticsearch
+    if not initialize_elasticsearch():
+        print("⚠️  Failed to initialize Elasticsearch")
+        success = False
 
     # Final status
     print(f"\n{'='*60}")
