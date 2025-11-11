@@ -182,3 +182,6 @@ $RECYCLE.BIN/
 ### Claude Code ###
 .claude/
 CLAUDE.md
+
+### 나중에 따로 MR 올리기 위해 잠시 git ignore 처리
+/retriever/rag_retrieval_pipeline.ipynb
