@@ -1,8 +1,10 @@
-from typing import List, Dict, Any
-from elasticsearch import helpers
+from elasticsearch import Elasticsearch, helpers
+from pymongo import MongoClient
 
-from db.mongodb import get_mongodb_client
-from db.elasticsearch.elasticsearch import get_elasticsearch_client
+from typing import List, Dict, Any
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
 
 class ElasticSearchIndexer:
@@ -11,11 +13,24 @@ class ElasticSearchIndexer:
     """
     def __init__(self):
         """
-        MongoDB 및 Elasticsearch 클라이언트의 싱글톤 객체를 얻고, 청킹 데이터가 저장된 MongoDB 컬렉션을 변수에 할당합니다.
+        MongoDB 및 Elasticsearch 클라이언트의 객체를 얻고, 청킹 데이터가 저장된 MongoDB 컬렉션을 변수에 할당합니다.
         """
-        self.mongodb_client = get_mongodb_client()
-        self.elasticsearch_client = get_elasticsearch_client()
+        BASE_DIR = Path(__file__).resolve().parents[2]  # root 경로
+        load_dotenv(BASE_DIR / "common" / ".env")
+
+        USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME", "root")
+        PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD", "example")
+        HOST = os.getenv("MONGO_HOST", "localhost")
+        PORT = int(os.getenv("MONGO_PORT", 27017))
+
+        self.mongodb_client = MongoClient(f"mongodb://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/")
         self.chunk_collection = self.mongodb_client["chunk_db"]["chunk_collection"]
+
+        ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD")
+        self.elasticsearch_client = Elasticsearch(
+            "http://localhost:9200",
+            basic_auth=("elastic", ELASTIC_PASSWORD)
+        )
 
 
     def index_file(self, file_name: str, index_name: str) -> bool:
@@ -78,6 +93,8 @@ class ElasticSearchIndexer:
 
         try:
             (success_count, errors) = helpers.bulk(self.elasticsearch_client, generate_actions())
+            actions = list(generate_actions())
+            print(actions)
 
         except Exception as e:
             print(f"❌ Error indexing chunks: {e}")
@@ -212,8 +229,8 @@ def main():
     """
     indexer = ElasticSearchIndexer()
 
-    indexer.index_file("000000002914_AU_EN", "msds")
-    indexer.keyword_search("Triethylene Glycol의 cas번호", ["msds"])
+    indexer.index_file("Copy of 000000000807_DK_EN", "msds")
+    indexer.keyword_search("Shell Chemicals", ["msds"])
 
 
 if __name__ == "__main__":
