@@ -1,7 +1,10 @@
-from typing import List, Dict, Any, Iterable, Tuple
-from elasticsearch import helpers
-from db.mongodb import get_mongodb_client
-from db.elasticsearch.elasticsearch import get_elasticsearch_client
+from elasticsearch import Elasticsearch, helpers
+from pymongo import MongoClient
+
+from typing import List, Dict, Any
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
 # ✅ synonyms_path 는 "엘라스틱서치 노드의 config 기준 경로"여야 함
 # 예) $ES_CONFIG/synonyms/synonyms_ko_en.txt  -> 여기서 "synonyms/synonyms_ko_en.txt" 로 지정
@@ -17,9 +20,25 @@ class ElasticSearchIndexer:
     """
 
     def __init__(self):
-        self.mongodb_client = get_mongodb_client()
-        self.elasticsearch_client = get_elasticsearch_client()
+        """
+        MongoDB 및 Elasticsearch 클라이언트의 객체를 얻고, 청킹 데이터가 저장된 MongoDB 컬렉션을 변수에 할당합니다.
+        """
+        BASE_DIR = Path(__file__).resolve().parents[2]  # root 경로
+        load_dotenv(BASE_DIR / "common" / ".env")
+
+        USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME", "root")
+        PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD", "example")
+        HOST = os.getenv("MONGO_HOST", "localhost")
+        PORT = int(os.getenv("MONGO_PORT", 27017))
+
+        self.mongodb_client = MongoClient(f"mongodb://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/")
         self.chunk_collection = self.mongodb_client["chunk_db"]["chunk_collection"]
+
+        ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD")
+        self.elasticsearch_client = Elasticsearch(
+            "http://localhost:9200",
+            basic_auth=("elastic", ELASTIC_PASSWORD)
+        )
 
     # --------------------------
     # 0) 인덱스 생성 (매핑 + 분석기)

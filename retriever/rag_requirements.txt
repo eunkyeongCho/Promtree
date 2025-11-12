@@ -20,6 +20,10 @@ elasticsearch==9.2.0
 faiss-cpu==1.12.0
 weaviate-client==4.17.0
 
+# ===== Graph Database =====
+# Neo4j
+neo4j==6.0.3
+
 # Embeddings
 sentence-transformers==5.1.2
 torch==2.9.0
