@@ -35,7 +35,9 @@ services:
       - ${ADMINER_PORT}:8080
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
+    build:
+      context: ./db/elasticsearch
+    image: my-elasticsearch:9.2.0-with-nori
     container_name: elasticsearch
     ports:
       - "9200:9200"
@@ -49,8 +51,9 @@ services:
     volumes:
       - "elasticsearch_data:/usr/share/elasticsearch/data:z"
       - "./db/elasticsearch/jvm.options.d:/usr/share/elasticsearch/config/jvm.options.d:z"
+      - "./db/elasticsearch/synonyms:/usr/share/elasticsearch/config/synonyms:ro,z"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      test: ["CMD", "curl", "-sf", "-u", "elastic:${ELASTIC_PASSWORD}", "http://localhost:9200/_cluster/health?pretty"]
       interval: 10s
       timeout: 10s
       retries: 120

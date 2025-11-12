@@ -1,0 +1,28 @@
+# 숫자/번호 계열 (양방향)
+no, no., num, number, 번호, 넘버
+cas no, cas no., cas number, cas registry number, 카스번호, 카스넘버
+
+# 문서/약어 (양방향)
+msds, 엠에스디에스, 물질안전보건자료, sds, 에스디에스
+tds, 티디에스, 기술자료, 기술데이터시트, technical data sheet
+
+# 단위 (양방향)
+ppm, 피피엠, parts per million
+wt %, weight %, 중량%, 중량퍼센트
+vol %, volume %, 부피%, 부피퍼센트
+
+# 물성 (양방향)
+flash point, 인화점
+boiling point, bp, b.p., 끓는점
+melting point, mp, m.p., 녹는점, 융점
+vapor pressure, 증기압
+specific gravity, 비중
+
+# 유해성/분류 (양방향)
+flammable, 인화성, 불붙는, 잘타는
+toxic, 유독성, 독성, 해로운
+corrosive, 부식성, 부식되는
+oxidizer, 산화제, 산화성
+carcinogen, 발암성
+mutagen, 변이원성
+reproductive toxin, 생식독성
