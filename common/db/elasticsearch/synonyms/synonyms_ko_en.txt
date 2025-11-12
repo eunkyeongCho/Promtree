@@ -1,28 +1,38 @@
-# 숫자/번호 계열 (양방향)
-no, no., num, number, 번호, 넘버
-cas no, cas no., cas number, cas registry number, 카스번호, 카스넘버
+# =========================
+# Number / CAS (normalize)
+# =========================
+no, no., num, number, 번호, 넘버 => number
+cas no, cas no., cas-no, cas number, cas registry number, 카스번호, 카스 넘버, 카스넘버 => cas number
 
-# 문서/약어 (양방향)
-msds, 엠에스디에스, 물질안전보건자료, sds, 에스디에스
-tds, 티디에스, 기술자료, 기술데이터시트, technical data sheet
+# =========================
+# Documents / Acronyms
+# =========================
+msds, 엠에스디에스, 물질안전보건자료, sds, 에스디에스 => sds
+tds, 티디에스, 기술자료, 기술데이터시트, technical data sheet => technical data sheet
 
-# 단위 (양방향)
-ppm, 피피엠, parts per million
-wt %, weight %, 중량%, 중량퍼센트
-vol %, volume %, 부피%, 부피퍼센트
+# =========================
+# Units
+# =========================
+ppm, 피피엠, parts per million => parts per million
+wt %, wt%, weight %, 중량%, 중량 퍼센트, 중량퍼센트 => weight percent
+vol %, vol%, volume %, 부피%, 부피 퍼센트, 부피퍼센트 => volume percent
 
-# 물성 (양방향)
-flash point, 인화점
-boiling point, bp, b.p., 끓는점
-melting point, mp, m.p., 녹는점, 융점
-vapor pressure, 증기압
-specific gravity, 비중
+# =========================
+# Physical properties
+# =========================
+flash point, 인화점 => flash point
+boiling point, boiling-point, bp, b.p., 끓는점, 비등점 => boiling point
+melting point, melting-point, mp, m.p., 녹는점, 융점 => melting point
+vapor pressure, vapour pressure, 증기압 => vapor pressure
+specific gravity, relative density, 비중, 상대밀도 => specific gravity
 
-# 유해성/분류 (양방향)
-flammable, 인화성, 불붙는, 잘타는
-toxic, 유독성, 독성, 해로운
-corrosive, 부식성, 부식되는
-oxidizer, 산화제, 산화성
-carcinogen, 발암성
-mutagen, 변이원성
-reproductive toxin, 생식독성
+# =========================
+# Hazards / Classification
+# =========================
+flammable, 인화성, 불붙는, 잘타는 => flammable
+toxic, 유독성, 독성, 해로운 => toxic
+corrosive, 부식성, 부식되는 => corrosive
+oxidizer, oxidiser, 산화제, 산화성 => oxidizer
+carcinogen, 발암성 => carcinogen
+mutagen, 변이원성 => mutagen
+reproductive toxin, 생식독성 => reproductive toxin

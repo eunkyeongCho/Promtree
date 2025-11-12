@@ -222,7 +222,6 @@ class ElasticSearchIndexer:
                                     "fields": [
                                         "content.ko^2.5",
                                         "content.en^2.5",
-                                        "content^1",
                                         "content.ngram^0.5"
                                     ],
                                     "type": "best_fields",
@@ -238,7 +237,7 @@ class ElasticSearchIndexer:
                             "must": [{
                                 "multi_match": {
                                     "query": query,
-                                    "fields": ["metadata.ko^1.5", "metadata.en^1.5", "metadata^1"],
+                                    "fields": ["metadata.ko^1.5", "metadata.en^1.5"],
                                     "fuzziness": fuzz,
                                     "operator": "or"
                                 }
@@ -257,8 +256,10 @@ class ElasticSearchIndexer:
             track_total_hits=False,
             highlight={
                 "fields": {
-                    "content": {}, "content.ko": {}, "content.en": {},
-                    "metadata": {}, "metadata.ko": {}, "metadata.en": {}
+                    "content.ko": {},
+                    "content.en": {},
+                    "metadata.ko": {},
+                    "metadata.en": {}
                 }
             }
         )
@@ -284,12 +285,10 @@ class ElasticSearchIndexer:
             print(f"Type: {r.get('type')} | File: {fn} | Page: {pg}")
             hl = r.get("highlight") or {}
             snippet_list = (
-                hl.get("content.ko")
-                or hl.get("content.en")
-                or hl.get("content")
-                or hl.get("metadata.ko")
+                hl.get("content.en")
+                or hl.get("content.ko")
                 or hl.get("metadata.en")
-                or hl.get("metadata")
+                or hl.get("metadata.ko")
                 or [ (r.get("content") or r.get("metadata") or "")[:200] ]
             )
             print(f"Snippet: {snippet_list[0]}\n")
