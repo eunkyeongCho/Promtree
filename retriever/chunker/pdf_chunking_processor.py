@@ -32,19 +32,19 @@ WINDOW_SIZE = 100         # 문장 경계 탐색 범위
 
 def extract_page_numbers(content: str) -> list:
     """
-    content에서 >>> page n 마커를 찾아서 페이지 번호들을 추출
-    
+    content에서 >>> page_n 마커를 찾아서 페이지 번호들을 추출
+
     Args:
         content: 페이지 마커가 포함된 텍스트
-        
+
     Returns:
         list: 추출된 페이지 번호들의 정렬된 리스트
     """
     page_numbers = []
-    page_matches = re.findall(r'>>> page (\d+)', content)
+    page_matches = re.findall(r'>>> page_(\d+)', content)
     for match in page_matches:
         page_numbers.append(int(match))
-    
+
     # 중복 제거하고 정렬
     page_numbers = sorted(list(set(page_numbers)))
     return page_numbers
@@ -52,21 +52,20 @@ def extract_page_numbers(content: str) -> list:
 
 def clean_content(content: str) -> str:
     """
-    content에서 >>> page n, >>> pend 마커 제거하고 정리
-    
+    content에서 >>> page_n 마커 제거하고 정리
+
     Args:
         content: 정리할 텍스트
-        
+
     Returns:
         str: 마커가 제거된 정리된 텍스트
     """
-    # >>> page n, >>> pend 마커 제거
-    content = re.sub(r'>>> page \d+', '', content)
-    content = re.sub(r'>>> pend', '', content)
-    
+    # >>> page_n 마커 제거 (pend는 이미 없음)
+    content = re.sub(r'>>> page_\d+', '', content)
+
     # 연속된 빈 줄을 하나로 정리
     content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)
-    
+
     return content.strip()
 
 
@@ -106,13 +105,13 @@ def get_page_number_for_section_final(section_content: str, original_content: st
     
     # 섹션 시작 이전의 마지막 페이지 번호
     content_before_section = original_content[:section_start]
-    page_matches_before = re.findall(r'>>> page (\d+)', content_before_section)
+    page_matches_before = re.findall(r'>>> page_(\d+)', content_before_section)
     if page_matches_before:
         page_numbers.append(int(page_matches_before[-1]))
-    
+
     # 섹션 범위 내의 모든 페이지 번호 찾기
     section_range = original_content[section_start:section_end]
-    page_matches_in_section = re.findall(r'>>> page (\d+)', section_range)
+    page_matches_in_section = re.findall(r'>>> page_(\d+)', section_range)
     for match in page_matches_in_section:
         page_numbers.append(int(match))
     
@@ -159,13 +158,13 @@ def get_page_number_for_table(table_lines: list, original_content: str) -> list:
     
     # 표 시작 이전의 마지막 페이지 번호
     content_before_table = original_content[:table_start]
-    page_matches_before = re.findall(r'>>> page (\d+)', content_before_table)
+    page_matches_before = re.findall(r'>>> page_(\d+)', content_before_table)
     if page_matches_before:
         page_numbers.append(int(page_matches_before[-1]))
-    
+
     # 표 범위 내의 모든 페이지 번호 찾기
     table_range = original_content[table_start:table_end]
-    page_matches_in_table = re.findall(r'>>> page (\d+)', table_range)
+    page_matches_in_table = re.findall(r'>>> page_(\d+)', table_range)
     for match in page_matches_in_table:
         page_numbers.append(int(match))
     

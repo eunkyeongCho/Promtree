@@ -10,6 +10,7 @@ import subprocess
 import time
 from pathlib import Path
 from elasticsearch import Elasticsearch
+from typing import Optional
 
 # Import database libraries (will be installed if not present)
 try:
