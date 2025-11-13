@@ -32,7 +32,7 @@ def query_embedding(model: SentenceTransformer, text: str) -> List[float]:
     return embedding[0]
 
 
-def search_similar_chunks(client: QdrantClient, qv, collection_name="demo", top_k=5):
+def search_similar_chunks(client: QdrantClient, qv, collections: list[str], top_k=5):
     """
     쿼리 벡터와 유사한 청크 검색
 
@@ -44,11 +44,28 @@ def search_similar_chunks(client: QdrantClient, qv, collection_name="demo", top_
     Returns:
         유사한 청크 리스트
     """
-    search_result = client.query_points(
-        collection_name=collection_name,
-        query=qv,
-        limit=top_k,
-    )
+
+    raw_results = []
+    for collection in collections: # 각 컬렉션에 대해 검색
+        raw_result = client.search(
+            collection_name=collection,
+            query_vector=qv,
+            limit=top_k
+        )
+        raw_results.extend(raw_result)
+
+    # 전체 결과 score 기준 정렬 (내림차순)
+    raw_results.sort(key=lambda x: x.score, reverse=True)
+
+    search_result = []
+    search_result = [
+        {
+            "score": r.score,
+            "chunk": r.payload
+        }
+        for r in raw_results
+    ]
+
     return search_result
 
 if __name__ == "__main__":
@@ -56,20 +73,11 @@ if __name__ == "__main__":
     example_query = "Product Number 1509의 실험결과를 요약하시오"
 
     qv = query_embedding(model, example_query)
-    results = search_similar_chunks(client, qv, collection_name="demo", top_k=2)
-
-    print(f"Query: {example_query}")
-    print(f"\n=== 검색 결과 (상위 {2}개) ===")
-
-    for idx, point in enumerate(results.points, 1):
-        print(f"\n--- 결과 {idx} ---")
-        print(f"Score: {point.score:.4f}")
-        print(f"Text: {point.payload.get('text', 'N/A')[:200]}...")
-        print(f"Chunk Index: {point.payload.get('chunk_index', 'N/A')}")
+    results = search_similar_chunks(client, qv, ["msds", "tds"], top_k=2)
 
     prompt = f"""
     당신은 질문에 답변하는 AI 어시스턴트입니다.
-    벡터 검색 결과와 그래프 검색 결과를 모두 참고하여 정확하고 포괄적인 답변을 제공하세요.
+    벡터 검색 결과를 참고하여 정확하고 포괄적인 답변을 제공하세요.
     
     질문: {example_query}
     Qdrant 벡터 검색 결과: {results}
@@ -93,5 +101,4 @@ if __name__ == "__main__":
     except requests.RequestException as e:
         print(f"HTTP request failed: {e}")
 
-    print(f"🔍 LLM response: {response.text}")
-
+    print(f"🔍 LLM response: {response.json()['response']}")

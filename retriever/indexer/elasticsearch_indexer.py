@@ -1,6 +1,8 @@
 from elasticsearch import Elasticsearch, helpers
 from pymongo import MongoClient
+
 from typing import List, Dict, Any, Iterable
+import uuid
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -139,6 +141,9 @@ class ElasticsearchIndexer:
         """동의어 파일 변경 시 검색 분석기를 핫 리로드하는 함수"""
         return self.elasticsearch_client.indices.reload_search_analyzers(index=index_name)
 
+    # --------------------------
+    # 2-1) 색인(단일 인덱스)
+    # --------------------------
     def index_file(self, file_name: str, index_name: str) -> bool:
         """MongoDB에서 특정 파일의 청크 데이터를 Elasticsearch에 색인하는 함수"""
         self.ensure_index(index_name)
@@ -203,6 +208,95 @@ class ElasticsearchIndexer:
             print("🎉 No errors during indexing!")
         return True
 
+    # --------------------------
+    # 2-2) 색인(멀티 인덱스)
+    # --------------------------
+    def index_chunks(self, chunks: list[dict], collections: list[str]) -> bool:
+        """
+        청크 리스트를 여러 Elasticsearch 인덱스에 동시 색인.
+        
+        Args:
+            chunks (list[dict]): 저장할 청크 리스트
+            collections (list[str]): 사용자가 선택한 collection 리스트
+        """
+
+        if not chunks:
+            print("⚠️ No chunks provided to index.")
+            return False
+
+        if not collections:
+            print("⚠️ No index names provided.")
+            return False
+
+        # 인덱스들 존재 여부 체크 및 생성
+        for collection in collections:
+            self.ensure_index(collection)
+
+        def _src(doc: Dict[str, Any]) -> Dict[str, Any]:
+            fi = doc.get("file_info") or {}
+            page_num = fi.get("page_num")
+
+            # page_num을 int로 통일
+            if isinstance(page_num, list):
+                page_num = page_num[0] if page_num else 0
+            elif page_num is None:
+                page_num = 0
+
+            return {
+                "type": doc.get("type", ""),
+                "content": doc.get("content") or "",
+                "metadata": doc.get("metadata") or "",
+                "file_info": {
+                    "file_uuid": fi.get("file_uuid", ""),
+                    "file_name": fi.get("file_name", ""),
+                    "collections": fi.get("collections", []),
+                    "page_num": int(page_num)
+                }
+            }
+
+        def generate_actions(target_index: str, chunks: list[dict]) -> Iterable[Dict[str, Any]]:
+            for doc in chunks:
+                yield {
+                    "_op_type": "index",
+                    "_index": target_index,
+                    "_id": str(doc.get("file_info").get("file_uuid", uuid.uuid4())),
+                    "_source": _src(doc)
+                }
+
+        overall_success = True
+
+        # 여러 인덱스에 각각 색인 실행
+        for collection in collections:
+            print(f"\n🚀 Indexing {len(chunks)} chunks into index `{collection}` ...")
+
+            try:
+                success_count, errors = helpers.bulk(
+                    self.elasticsearch_client,
+                    generate_actions(collection, chunks),
+                    refresh="wait_for",
+                    raise_on_error=False
+                )
+            except Exception as e:
+                print(f"❌ Error indexing into `{collection}`: {e}")
+                overall_success = False
+                continue
+
+            error_count = len(errors) if errors else 0
+            print(f"✅ Indexed {success_count} chunks into `{collection}` with {error_count} errors.")
+
+            if errors:
+                print("\n⚠️ Detailed errors:")
+                for i, err in enumerate(errors, start=1):
+                    print(f"  {i}. {err}\n")
+                overall_success = False
+            else:
+                print("🎉 No errors during indexing!")
+
+        return overall_success
+
+    # --------------------------
+    # 3) 키워드 검색
+    # --------------------------
     def keyword_search(self, query: str, index_names: List[str]) -> List[Dict[str, Any]]:
         """한/영 동의어, 오타 허용, 하이라이트를 적용한 키워드 검색 함수"""
         RETURN_SIZE = 10
