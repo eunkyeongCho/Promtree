@@ -174,34 +174,19 @@ class Neo4jKnowledgeGraph:
 
     
     # file_name을 받아서, MongoDB에서 해당 청크들을 찾아서, 반복문을 돌면서 각각 노드와 관계를 추출하고, neo4j에 저장하는 함수(저장할 때 merge 사용)
-    async def async_ingest_file(self, file_name: str) -> bool:
+    async def async_ingest_chunks(self, chunks: list[dict]) -> bool:
         """
-        지정된 파일 이름을 기준으로 MongoDB에서 chunk 데이터를 조회하고,
-        chunk 내용을 기반으로 노드/관계를 생성하여 Neo4j에 MERGE 합니다.
+        청크들을 직접 매개값으로 받고 chunk 내용을 기반으로 노드/관계를 생성하여 Neo4j에 MERGE 합니다.
 
         Args:
-            file_name (str): 대상 파일 이름
+            chunks(list[str]): 청크 배열
 
         Returns:
             bool: 하나 이상의 chunk가 정상 저장되면 True, 그렇지 않으면 False
         """
 
-        # MongoDB에서 청크들 가져오기
-        if not self.chunk_collection.find_one({"file_info.file_name": file_name}):
-            print(f"⚠️ No chunk data found for file: {file_name}")
-            return False
-
-        try:
-            chunks_cursor = self.chunk_collection.find({"file_info.file_name": file_name})
-            chunks = list(chunks_cursor)
-            print(f"✅ Successfully got {len(chunks)} chunks from MongoDB.")
-            
-        except Exception as e:
-            print(f"❌ Failed to get chunks from MongoDB: {e}")
-            return False
-
         if not chunks:
-            print(f"⚠️ No chunk data found for file: {file_name}")
+            print("⚠️ No chunks provided.")
             return False
 
         extract_success_count = 0  # 추출에 성공한
@@ -227,9 +212,9 @@ class Neo4jKnowledgeGraph:
         print(f"🚀 Sending {len(tasks)} LLM requests concurrently... (max concurrent: {self.MAX_CONCURRENT})")
         print(f"🔁 LLM responses received. Inserting into Neo4j...")
 
-        nodes_and_relationships = await asyncio.gather(*tasks, return_exceptions=True)
+        all_chunks_nodes_and_relationships = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for i, result in enumerate(nodes_and_relationships):
+        for i, result in enumerate(all_chunks_nodes_and_relationships):
             if isinstance(result, Exception):
                 print(f"❌ Task {i} failed with error: {result}")
                 extract_fail_count += 1
@@ -237,35 +222,39 @@ class Neo4jKnowledgeGraph:
                 print(f"✅ Task {i} succeeded, got {len(result)} relationships")
                 extract_success_count += 1
 
-        for nodes_and_relationship in nodes_and_relationships:
-            relation_description = nodes_and_relationship['relationship_description']
-
-            if not relation_description:
-                print("⚠️ Skipping relationship without description.")
+        for chunk_nodes_and_relationships in all_chunks_nodes_and_relationships:  # 바깥 list for문 돌면 list 하나씩 나옴!
+            if not isinstance(chunk_nodes_and_relationships, list):
                 continue
 
-            try:
-                self.neo4j_driver.execute_query(
-                    """
-                    MERGE (source:Entity {name: $source_name, alias: $source_alias, file_info: $source_file_info})
-                    MERGE (target:Entity {name: $target_name, alias: $target_alias, file_info: $target_file_info})
-                    MERGE (source)-[relationship:`%s` {confidence: $confidence}]->(target)
-                    """
-                    % relation_description,
-                    source_name=nodes_and_relationship["source_node"]["name"],
-                    source_alias=nodes_and_relationship["source_node"]["alias"],
-                    source_file_info=json.dumps(chunk.get("file_info", {})),
-                    target_name=nodes_and_relationship["target_node"]["name"],
-                    target_alias=nodes_and_relationship["target_node"]["alias"],
-                    target_file_info=json.dumps(chunk.get("file_info", {})),
-                    confidence=float(nodes_and_relationship["confidence"]),
-                    database_="neo4j"  # 무료 버전은 이름이 neo4j인 데이터베이스 하나만 사용 가능
-                )
-                save_success_count += 1
-            except Neo4jError as e:
-                print(f"❌ Failed to insert into Neo4j : {e.__cause__}")
-                save_fail_count += 1
-                continue
+            for nodes_and_relationship in chunk_nodes_and_relationships:  # 그 list는 dict의 배열이기 때문에, 또 반복문 돌면 dict가 하나씩 나옴!
+                relation_description = nodes_and_relationship.get("relationship_description")
+
+                if not relation_description:
+                    print("⚠️ Skipping relationship without description.")
+                    continue
+
+                try:
+                    self.neo4j_driver.execute_query(
+                        """
+                        MERGE (source:Entity {name: $source_name, alias: $source_alias, file_info: $source_file_info})
+                        MERGE (target:Entity {name: $target_name, alias: $target_alias, file_info: $target_file_info})
+                        MERGE (source)-[relationship:`%s` {confidence: $confidence}]->(target)
+                        """
+                        % relation_description,
+                        source_name=nodes_and_relationship["source_node"]["name"],
+                        source_alias=nodes_and_relationship["source_node"]["alias"],
+                        source_file_info=json.dumps(chunk.get("file_info", {})),
+                        target_name=nodes_and_relationship["target_node"]["name"],
+                        target_alias=nodes_and_relationship["target_node"]["alias"],
+                        target_file_info=json.dumps(chunk.get("file_info", {})),
+                        confidence=float(nodes_and_relationship["confidence"]),
+                        database_="neo4j"  # 무료 버전은 이름이 neo4j인 데이터베이스 하나만 사용 가능
+                    )
+                    save_success_count += 1
+                except Neo4jError as e:
+                    print(f"❌ Failed to insert into Neo4j : {e.__cause__}")
+                    save_fail_count += 1
+                    continue
 
         if save_success_count > 0:
             print(f"✅ Successfully extracted {extract_success_count}/{extract_success_count + extract_fail_count} from chunks.")
@@ -278,7 +267,8 @@ class Neo4jKnowledgeGraph:
     
     def search_graph(self, query: str) -> list[dict[str, Any]]:
 
-        nodes = self.extract_nodes_or_relationships(query, False)
+        semaphore = asyncio.Semaphore(self.MAX_CONCURRENT)
+        nodes = self._async_extract_nodes_or_relationships(semaphore, query, False)
         confidence_results = []
 
         for node in nodes:
@@ -367,7 +357,7 @@ def main():
     """
     knowledge_graph = Neo4jKnowledgeGraph()
 
-    asyncio.run(knowledge_graph.async_ingest_file("KR_msds_3M_Fish Protein ELISA Kit")) # 청킹한 문서 이름으로 바꿔주세요
+    asyncio.run(knowledge_graph.async_ingest_file("Copy of 5bc0c676-018f-46de-bb0d-0103ff9c388c")) # 청킹한 문서 이름으로 바꿔주세요
     # knowledge_graph.search_graph("ISA Kit는 무엇을 테스트하나요?") # 검색 대상인 문서에 대한 질문으로 바꿔주세요
     knowledge_graph.generate_answer("ISA Kit는 무엇을 테스트하나요?")
     knowledge_graph.close()
