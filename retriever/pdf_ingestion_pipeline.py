@@ -9,10 +9,12 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import re
+import asyncio
 
 from retriever.chunker.markdown_chunker import MarkdownChunker
 from retriever.embedding import chunk_embedding_and_upsert
 from retriever.indexer.elasticsearch_indexer import ElasticsearchIndexer
+from retriever.knowledge_graph.neo4j_knowledge_graph import Neo4jKnowledgeGraph
 
 
 class PdfIngestionPipeline:
@@ -131,6 +133,12 @@ class PdfIngestionPipeline:
         """
         chunk_embedding_and_upsert(chunks, self.embedding_model, self.vector_db_client, collections)
 
+    def _knowledge_graph(self, chunks: list[dict]):
+        """
+        청킹을 가져와서 지식 그래프 추출 및 저장
+        """
+        asyncio.run(Neo4jKnowledgeGraph().async_ingest_chunks(chunks))
+
 
     def run_pdf_ingestion_pipeline(self, file_uuid: str, collections: list[str]):
         """
@@ -145,6 +153,7 @@ class PdfIngestionPipeline:
 
             self._indexing(chunks_and_collections["chunks"], chunks_and_collections["collections_to_save"])
             self._embedding(chunks_and_collections["chunks"], chunks_and_collections["collections_to_save"])
+            self._knowledge_graph(chunks_and_collections["chunks"])
         except RuntimeError as e:
             print(e)
             return
