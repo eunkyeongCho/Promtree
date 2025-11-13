@@ -47,7 +47,7 @@ if mongodb is None:
     raise RuntimeError("MongoDB 연결 실패")
 
 collection = mongodb['msds_markdown_collection']
-document_id = 'MOCK_MSDS_002'
+document_id = 'MOCK_MSDS_007'
 doc = collection.find_one({'document_id': document_id})
 
 if doc is None:
