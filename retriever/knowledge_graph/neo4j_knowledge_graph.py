@@ -242,10 +242,10 @@ class Neo4jKnowledgeGraph:
                         """
                         % relation_description,
                         source_name=nodes_and_relationship["source_node"]["name"],
-                        source_alias=nodes_and_relationship["source_node"]["alias"],
+                        source_alias=nodes_and_relationship["source_node"].get("alias", []),
                         source_file_info=json.dumps(chunk.get("file_info", {})),
                         target_name=nodes_and_relationship["target_node"]["name"],
-                        target_alias=nodes_and_relationship["target_node"]["alias"],
+                        target_alias=nodes_and_relationship["target_node"].get("alias", []),
                         target_file_info=json.dumps(chunk.get("file_info", {})),
                         confidence=float(nodes_and_relationship["confidence"]),
                         database_="neo4j"  # 무료 버전은 이름이 neo4j인 데이터베이스 하나만 사용 가능
