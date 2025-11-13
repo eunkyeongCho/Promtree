@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 # 예) $ES_CONFIG/synonyms/synonyms_ko_en.txt  -> 여기서 "synonyms/synonyms_ko_en.txt" 로 지정
 SYN_PATH = "synonyms/synonyms_ko_en.txt"
 
-class ElasticSearchIndexer:
+class ElasticsearchIndexer:
     """
     MongoDB의 청킹 데이터를 Elasticsearch에 색인/검색하는 유틸.
     - 한/영 분석기 분리 + 영어 검색 시 synonym_graph 적용
