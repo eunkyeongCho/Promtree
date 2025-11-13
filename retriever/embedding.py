@@ -1,9 +1,12 @@
 from sentence_transformers import SentenceTransformer
-from typing import List
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 from qdrant_client.models import VectorParams, Distance
+
+from typing import List
 import uuid
+import json
+
 
 def init():
     """
@@ -42,6 +45,13 @@ def chunk_embedding_and_upsert(chunks: List[dict], model: SentenceTransformer, c
             vector=embeddings,
             payload=chunk
         )
+
+        print(json.dumps({
+            "id": point.id,
+            "vector_dim": len(point.vector),
+            "payload": point.payload
+        }, ensure_ascii=False, indent=2))
+
         points.append(point)
 
     print("✅ Embedding completed.\n")
