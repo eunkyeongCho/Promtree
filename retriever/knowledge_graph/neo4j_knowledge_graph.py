@@ -9,7 +9,6 @@ import os
 import json
 from typing import Any
 import asyncio
-import aiohttp
 
 
 class Neo4jKnowledgeGraph:
