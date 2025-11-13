@@ -5,16 +5,25 @@ python-dotenv==1.1.1
 # Data Processing
 numpy==2.3.4
 pandas==2.3.3
+beautifulsoup4==4.14.2
 
 # ===== Database =====
 # MongoDB
 pymongo==4.15.3
 dnspython==2.8.0
 
+# Elasticsearch
+elasticsearch==9.2.0
+
 # ===== RAG & Vector Store =====
 # Vector Search
 faiss-cpu==1.12.0
 weaviate-client==4.17.0
+qdrant-client==1.15.1
+
+# ===== Graph Database =====
+# Neo4j
+neo4j==6.0.3
 
 # Embeddings
 sentence-transformers==5.1.2

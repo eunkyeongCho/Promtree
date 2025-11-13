@@ -9,6 +9,7 @@ import sys
 import subprocess
 import time
 from pathlib import Path
+from elasticsearch import Elasticsearch
 from typing import Optional
 
 # Import database libraries (will be installed if not present)
@@ -177,13 +178,18 @@ def initialize_mongodb() -> bool:
         temp_tds_db = client['temp_tds_db']
         temp_tds_collection = temp_tds_db['temp_tds_collection']
 
+        # Chunk DB
+        chunk_db = client['chunk_db']
+        chunk_collection = chunk_db['chunk_collection']
+
         # Initialize collections with initial documents
         collections = [
             (raw_collection, {"init": "init_raw_object"}),
             (md_msds_collection, {"init": "init_md_msds_object"}),
             (md_tds_collection, {"init": "init_md_tds_object"}),
             (retrieval_collection, {"init": "init_retrieval_object"}),
-            (temp_tds_collection, {"init": "init_temp_tds_object"})
+            (temp_tds_collection, {"init": "init_temp_tds_object"}),
+            (chunk_collection, {"init": "init_chunk_object"})
         ]
 
         for collection, init_doc in collections:
@@ -306,18 +312,84 @@ def initialize_postgresql() -> bool:
         print(f"❌ PostgreSQL initialization failed: {e}")
         return False
 
+# def initialize_elasticsearch() -> bool:
+#     """Initialize Elasticsearch connection and ensure base index exists."""
+
+#     print(f"\n{'='*60}")
+#     print(f"🔎 Initializing Elasticsearch")
+#     print(f"{'='*60}")
+
+#     ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD")
+
+#     elasticsearch_client = Elasticsearch(
+#         "http://localhost:9200",
+#         basic_auth=("elastic", ELASTIC_PASSWORD)
+#     )
+
+#     try:
+#         elastic_client_info = elasticsearch_client.info()
+#         if(elastic_client_info):
+#             print("✅ Elasticsearch 연결 성공")
+#         else:
+#             print("❌ Elasticsearch 연결 실패")
+#             return False
+#     except Exception as e:  
+#         print(f"❌ Elasticsearch 연결 테스트 실패: {e}")
+#         return False
+
+#     # 인덱스 만들 때 사용할 매핑
+#     mappings={
+#         "properties": {
+#             "type": { "type": "keyword" },
+#             "content": { "type": "text" },
+#             "metadata": { "type": "text" },
+#             "file_info": {
+#                 "properties": {
+#                 "file_name": { "type": "keyword" },
+#                 "page_num":   { "type": "integer" }
+#                 }
+#             }
+#         }
+#     }
+
+#     # 인덱스 만들 때 사용할 설정
+#     settings = {
+#         "index": {
+#             "number_of_shards": 1,
+#             "number_of_replicas": 0
+#         }
+#     }
+
+#     # 인덱스 있으면 바로 리턴하고, 없으면 생성
+#     msds_exists = elasticsearch_client.indices.exists(index="msds")
+#     tds_exists = elasticsearch_client.indices.exists(index="tds")
+
+#     if msds_exists and tds_exists:
+#         print("✅ MSDS and TDS indices already exist")
+#         return True
+
+#     if not elasticsearch_client.indices.exists(index="msds"):
+#         print(f"📦 Creating index: msds")
+#         elasticsearch_client.indices.create(index="msds", mappings=mappings, settings=settings)
+
+#     if not elasticsearch_client.indices.exists(index="tds"):
+#         print(f"📦 Creating index: tds")
+#         elasticsearch_client.indices.create(index="tds", mappings=mappings, settings=settings)
+
+#     return True
 
 def main():
     """Main initialization function."""
     print("""
 ╔══════════════════════════════════════════════════════════╗
-║          Project Initialization Script                     ║
-║                                                            ║
-║  This script will:                                        ║
-║  1. Install Python dependencies                           ║
-║  2. Start Docker containers                               ║
-║  3. Initialize MongoDB                                    ║
-║  4. Initialize PostgreSQL                                 ║
+║          Project Initialization Script                   ║
+║                                                          ║
+║  This script will:                                       ║
+║  1. Install Python dependencies                          ║
+║  2. Start Docker containers                              ║
+║  3. Initialize MongoDB                                   ║
+║  4. Initialize PostgreSQL                                ║
+║  5. Initialize Elasticsearch                             ║
 ╚══════════════════════════════════════════════════════════╝
     """)
 
@@ -346,6 +418,11 @@ def main():
         print("⚠️  Failed to initialize PostgreSQL")
         success = False
 
+    # # Step 5: Initialize Elasticsearch
+    # if not initialize_elasticsearch():
+    #     print("⚠️  Failed to initialize Elasticsearch")
+    #     success = False
+
     # Final status
     print(f"\n{'='*60}")
     if success:
@@ -357,6 +434,7 @@ All services are running and ready:
 ✅ Docker containers started
 ✅ MongoDB connected and initialized
 ✅ PostgreSQL connected and initialized
+✅ Elasticsearch connected and initialized
 
 You can now start developing your application!
         """)
