@@ -1,12 +1,3 @@
-# _pdf 불러와서 청킹 (프로젝트 경로에 있는 pdf 중 아직 청킹되지 않은 것 (uuid 기준)-> 청킹해서 mongodb에 저장)
-# _청킹 결과를 벡터 데이터베이스에 저장 (mongodb에서 불러온 청크 -> 벡터 데이터베이스에 저장)
-
-# 인풋으로 사용자가 사용한다고 태그한 콜렉션 이름 리스트도 받도록
-# _키워드 검색 (쿼리 -> 키워드 검색 결과)
-# _벡터 데이터베이스에서 검색 (쿼리 -> 벡터 검색 결과)
-# _그래프 검색 (쿼리 -> 그래프 검색 결과)
-
-# 답변생성 (쿼리 -> 생성된 답변)
 from pymongo import MongoClient
 from elasticsearch import Elasticsearch
 from qdrant_client import QdrantClient
