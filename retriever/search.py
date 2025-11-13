@@ -97,10 +97,12 @@ class Search:
         - type: text/table/image/link 등 문서 유형
         - content: imgae의 경로 | link의 원본링크 | List[dict[str, str]] 형태로 언피봇된 html table의 내용 | text의 내용
         - metadata: image의 메타데이터 | link의 메타데이터 | None
-        - file_info: {
+        - file_info: {{
+            "file_uuid" : "백엔드에서 넘어오는 Doc ID",
             "file_name" : "파일 이름",
+            "collection_names" : ["collection 이름1", "collection 이름2", ...],
             "page_num" : 페이지 번호 정수 배열
-        }
+        }}
 
         검색된 문서(JSON):
         [키워드 검색 결과]
@@ -126,15 +128,16 @@ class Search:
 
         -----------------------------
         [출력 형식]
-
         다음 형식으로만 답변하세요:
 
-        답변:
-        (여기에 답변 작성)
-
-        참고문서:
-        - 파일명: XXX.pdf, 페이지: Y
-        - 파일명: ZZZ.pdf, 페이지: W
+        {{
+            "answer" : "답변",
+            "file_info" : {{
+                "file_uuid" : "백엔드에서 넘어오는 Doc ID",
+                "file_name" : "파일 이름",
+                "page_num" : 페이지 번호 정수 배열
+            }}
+        }}
         """
 
         RUNPOD_URI = os.getenv("RUNPOD_URI")
