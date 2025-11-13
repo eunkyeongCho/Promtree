@@ -444,14 +444,21 @@ class MarkdownChunker:
 
         return text_raw_chunks
 
-    def attach_page_num_and_file_name(self, raw_chunks: list[dict], pages_info: list, file_name: str) -> list:
+    def attach_file_info(self, raw_chunks: list[dict], pages_info: list, file_info: dict) -> list:
         """
-        각 청크에 page_num과 file_name을 생성하고 start_index, end_index 키는 삭제합니다.
+        각 청크에 file_info를 생성하고 start_index, end_index 키는 삭제합니다.
 
         Args:
             raw_chunks(list[dict]): 미완성 chunk 딕셔너리의 배열
             pages_info(list): get_pages_info() 함수가 반환한 각 페이지의 인덱스 범위 정보
-            file_name(str): 사용자로부터 받은 md 파일의 이름
+            file_info(dict):
+              - 형식
+                {
+                    "file_uuid" : "백엔드에서 넘어오는 Doc ID",
+                    "file_name" : "파일 이름",
+                    "collection_names" : ["collection 이름1", "collection 이름2", ...],
+                    "page_num" : [1, 2]
+                }
 
         Returns:
             list: 완전한 청크 리스트
@@ -464,7 +471,7 @@ class MarkdownChunker:
             if raw_chunk['start_index'] == 0 and raw_chunk['end_index'] == 0:
                 
                 raw_chunk['page_num'] = [0]
-                raw_chunk['file_name'] = file_name
+                raw_chunk['file_name'] = file_info['file_name']
                 raw_chunk.pop('start_index', None)
                 raw_chunk.pop('end_index', None)
 
@@ -479,7 +486,9 @@ class MarkdownChunker:
                     break
 
             raw_chunk['file_info'] = {
-                'file_name': file_name,
+                'file_uuid': file_info['file_uuid'],
+                'file_name': file_info['file_name'],
+                'collections': file_info['collections'],
                 'page_num': list(range(start_page, end_page + 1))
             }
             raw_chunk.pop('start_index', None)
@@ -550,9 +559,26 @@ class MarkdownChunker:
                 text_raw_chunks = self.generate_text_chunk(md_without_html_table) # text 타입 처리
                 raw_chunks.extend(text_raw_chunks)
 
-                chunks = self.attach_page_num_and_file_name(raw_chunks, pages_info, file_path.stem) # raw chunks에 page_num, file_name 추가
+                file_info = {
+                    "file_uuid": "c1c6213e-753e-4b0c-9b78-9abf2af5c90d",
+                    "file_name": file_path.name,
+                    "collections": ["msds", "tds"],
+                }
+                chunks = self.attach_file_info(raw_chunks, pages_info, file_info) # raw chunks에 page_num, file_name 추가
 
-                return self.save_chunks_to_db(chunks) # 청크들 DB에 저장
+                print("\n=== Chunk Preview (5 items) ===")
+                for i, c in enumerate(chunks[:5], 1):
+                    print(f"\n--- Chunk {i} ---")
+                    print(f"type        : {c.get('type')}")
+                    print(f"content     : {str(c.get('content'))[:200]}...")
+                    print(f"metadata : {c.get('metadata')}")
+                    print(f"file_info   : {c.get('file_info', {})}")
+                    
+                # self.save_chunks_to_db(chunks) # 청크들 DB에 저장
+
+                print(f"🎉 Chunking succeeded for {file_path.name}")
+
+                return chunks
 
         except Exception as e:
             print(f"😢 Chunking failed for {file_path.name}: {e}")
