@@ -8,7 +8,6 @@ from neo4j import GraphDatabase
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-import re
 import asyncio
 
 from retriever.chunker.markdown_chunker import MarkdownChunker
@@ -72,7 +71,7 @@ class PdfIngestionPipeline:
 
         self.neo4j_driver = GraphDatabase.driver(NEO4J_URI, auth=NEO4J_AUTH)
 
-    def _chunking(self, file_uuid: str, collections: list[str]) -> dict[str, list[str]]:
+    def _chunking(self, md: str, file_uuid: str, file_name: str, collections: list[str]) -> dict[str, list[str]]:
         """
         제공된 collection 중 청킹이 이뤄지지 않은 collection이 존재할 때만 청킹을 하고, 청킹이 이뤄지지 않은 collection만 필터링해서 반환합니다.
         """
@@ -99,14 +98,8 @@ class PdfIngestionPipeline:
             if not points:
                 collections_to_save.append(collection)
 
-        target_file_name_pattern = re.compile(rf"^{file_uuid}_.*")
-
-        for file_path in self.markdown_path.rglob("*.md"): # md 파일만 순회돌기
-            file_name = file_path.stem
-
-            if target_file_name_pattern.match(file_name):
-                if len(collections_to_save) > 0:
-                    chunks = self.markdown_chunker.chunk_markdown_file(file_path, file_uuid, collections_to_save)
+                if len(collections_to_save) > 0: # 만약 새로 저장해야 할 collection이 있다면...
+                    chunks = self.markdown_chunker.chunk_markdown_file(md, file_uuid, file_name, collections_to_save)
 
                     return {
                         "chunks": chunks,
@@ -140,15 +133,15 @@ class PdfIngestionPipeline:
         asyncio.run(Neo4jKnowledgeGraph().async_ingest_chunks(chunks))
 
 
-    def run_pdf_ingestion_pipeline(self, file_uuid: str, collections: list[str]):
+    def run_pdf_ingestion_pipeline(self, md: str, file_uuid: str, file_name: str, collections: list[str]):
         """
         pdf를 가져와서 청킹, 인덱싱, 임베딩까지 한 함수에서 하는 함수
         """
 
         try:
-            chunks_and_collections = self._chunking(file_uuid, collections)
+            chunks_and_collections = self._chunking(md, file_uuid, file_name, collections)
 
-            if chunks_and_collections is None:
+            if not chunks_and_collections:
                 return
 
             self._indexing(chunks_and_collections["chunks"], chunks_and_collections["collections_to_save"])
@@ -160,5 +153,22 @@ class PdfIngestionPipeline:
 
 
 if __name__ == "__main__":
+
     pdf_ingestion_pipeline = PdfIngestionPipeline()
-    pdf_ingestion_pipeline.run_pdf_ingestion_pipeline("5bc0c676-018f-46de-bb0d-0103ff9c388c", ["msds"])
+
+    markdown_file_path = (
+        PdfIngestionPipeline.BASE_DIR 
+        / "retriever" 
+        / "markdown_sample_data" 
+        / "5bc0c676-018f-46de-bb0d-0103ff9c388c_hahaha.md"
+    )  # 테스트할 md 파일 경로로 바꿔주세요.
+
+    with open(markdown_file_path, "r", encoding="utf-8") as f:  # 파일로부터 md 문자열을 읽어옵니다.
+        md = f.read()
+
+    pdf_ingestion_pipeline.run_pdf_ingestion_pipeline(
+        md,
+        "5bc0c676-018f-46de-bb0d-0103ff9c388c",
+        "5bc0c676-018f-46de-bb0d-0103ff9c388c_hahaha",
+        ["msds"],
+    )
