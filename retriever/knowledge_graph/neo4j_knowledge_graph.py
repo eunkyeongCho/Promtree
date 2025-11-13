@@ -265,10 +265,10 @@ class Neo4jKnowledgeGraph:
             return False
 
     
-    def search_graph(self, query: str) -> list[dict[str, Any]]:
+    async def async_search_graph(self, query: str) -> list[dict[str, Any]]:
 
         semaphore = asyncio.Semaphore(self.MAX_CONCURRENT)
-        nodes = self._async_extract_nodes_or_relationships(semaphore, query, False)
+        nodes = await self._async_extract_nodes_or_relationships(semaphore, query, False)
         confidence_results = []
 
         for node in nodes:
@@ -307,6 +307,7 @@ class Neo4jKnowledgeGraph:
                 })
 
         confidence_results.sort(key=lambda x: x["confidence"], reverse=True) # confidence 기준 내림차순 정렬
+        confidence_results = confidence_results[:5]
 
         results = [] # confidence 키 없앤 results
         for confidence_result in confidence_results:
@@ -316,40 +317,43 @@ class Neo4jKnowledgeGraph:
                 "target_file_info": confidence_result["target_file_info"]
             })
 
-        print(f"🔍 Results: {results}")
+            print(f"🔍 {confidence_result['graph']}")
+            print(f"Source File Info: {confidence_result['source_file_info']}")
+            print(f"Target File Info: {confidence_result['target_file_info']}")
+            print(f"Confidence: {confidence_result['confidence']}")
+
         return results
 
-
     def generate_answer(self, query: str) -> str:
-        """
-        답변생성
-        """
+            """
+            답변생성
+            """
 
-        results = self.search_graph(query)
+            results = self.search_graph(query)
 
-        prompt = f"""
-        당신은 질문에 답변하는 AI 어시스턴트입니다.
-        벡터 검색 결과와 그래프 검색 결과를 모두 참고하여 정확하고 포괄적인 답변을 제공하세요.
-        
-        질문: {query}
-        그래프 검색 결과: {results}
-        """
+            prompt = f"""
+            당신은 질문에 답변하는 AI 어시스턴트입니다.
+            벡터 검색 결과와 그래프 검색 결과를 모두 참고하여 정확하고 포괄적인 답변을 제공하세요.
+            
+            질문: {query}
+            그래프 검색 결과: {results}
+            """
 
-        # 답변 요청
-        url = f"{self.RUNPOD_URI}/api/generate"
-        payload = {"model": self.RUNPOD_LLM_MODEL, "prompt": prompt, "stream": False}
-        timeout = float(self.TIMEOUT) if self.TIMEOUT else None
-        response = requests.post(url, json=payload, timeout=timeout)
+            # 답변 요청
+            url = f"{self.RUNPOD_URI}/api/generate"
+            payload = {"model": self.RUNPOD_LLM_MODEL, "prompt": prompt, "stream": False}
+            timeout = float(self.TIMEOUT) if self.TIMEOUT else None
+            response = requests.post(url, json=payload, timeout=timeout)
 
-        try:
-            response.raise_for_status() # 에러면 예외발생
-        except requests.RequestException as e:
-            print(f"HTTP request failed: {e}")
+            try:
+                response.raise_for_status() # 에러면 예외발생
+            except requests.RequestException as e:
+                print(f"HTTP request failed: {e}")
 
-        print(f"🔍 LLM response: {response.json()['response']}")
-        return response.json()['response']
+            print(f"🔍 LLM response: {response.json()['response']}")
+            return response.json()['response']
 
-        
+
 def main():
     """
     Neo4jKnowledgeGraph 통해 그래프 저장 및 검색을 테스트하는 코드입니다.
