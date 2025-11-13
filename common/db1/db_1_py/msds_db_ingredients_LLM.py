@@ -232,6 +232,21 @@ Expected JSON:
    "additional_info":{}}
 ]
 
+Example I (json 형태 표):
+Section:
+<table>
+{"화학물질명": "Light Distillates - Hydrotreated", "관용명": "자료 없음 .", "카스 번호": "64742-47-8", "함유량 (%)": "60 - 70"},
+{"화학물질명": "카나우바 왁스", "관용명": "자료 없음 .", "카스 번호": "8015-86-9", "함유량 (%)": "15 - 25"}
+</table>
+Expected JSON::
+[
+  {"name":"Light Distillates - Hydrotreated","synonym":["자료 없음"],"cas":"64742-47-8","ec_number":null,
+   "concentration":{"raw":"60 - 70","value":null,"min":60,"max":70,"unit":%,"basis":null,"op_min":null,"op_max":null},
+   "additional_info":{}},
+  {"name":"카나우바 왁스","synonym":["자료 없음"],"cas":"8015-86-9","ec_number":null,
+   "concentration":{"raw":"10 - 20","value":null,"min":10,"max":20,"unit":%,"basis":null,"op_min":null,"op_max":null},
+   "additional_info":{}}
+]
 
 Task:
 Extract from the following input as "Section" and return only the JSON array.
