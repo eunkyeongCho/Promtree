@@ -523,7 +523,7 @@ class MarkdownChunker:
             return False
 
 
-    def chunk_markdown_file(self, file_path: Path) -> bool:
+    def chunk_markdown_file(self, file_path: Path, file_uuid: str, collections: list[str]) -> bool:
         """
         주어진 markdown 텍스트 파일을 chunking하고, 완성된 청크들을 Chunk DB에 저장합니다.
 
@@ -560,9 +560,9 @@ class MarkdownChunker:
                 raw_chunks.extend(text_raw_chunks)
 
                 file_info = {
-                    "file_uuid": "c1c6213e-753e-4b0c-9b78-9abf2af5c90d",
+                    "file_uuid": file_uuid,
                     "file_name": file_path.name,
-                    "collections": ["msds", "tds"],
+                    "collections": collections
                 }
                 chunks = self.attach_file_info(raw_chunks, pages_info, file_info) # raw chunks에 page_num, file_name 추가
 
