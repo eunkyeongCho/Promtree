@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 from elasticsearch import Elasticsearch
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, MatchValue
+from qdrant_client.models import Filter, FieldCondition, MatchValue, VectorParams, Distance
 from sentence_transformers import SentenceTransformer
 from neo4j import GraphDatabase
 
@@ -12,6 +12,7 @@ import re
 
 from retriever.chunker.markdown_chunker import MarkdownChunker
 from retriever.embedding import chunk_embedding_and_upsert
+from retriever.indexer.elasticsearch_indexer import ElasticsearchIndexer
 
 
 class PdfIngestionPipeline:
@@ -44,11 +45,24 @@ class PdfIngestionPipeline:
             basic_auth=("elastic", ELASTIC_PASSWORD)
         )
 
+        self.elasticsearch_indexer = ElasticsearchIndexer()
+
         # --- Embedding Model Client ---
         self.embedding_model = SentenceTransformer('Qwen/Qwen3-Embedding-0.6B', trust_remote_code=True)
 
         # --- Vector Database Client ---
         self.vector_db_client = QdrantClient(url="http://localhost:6333")
+
+        collections = ["msds", "tds"]
+        for collection in collections:
+            self.vector_db_client.recreate_collection(
+                collection_name=collection,
+                vectors_config=VectorParams(
+                    size=1024,
+                    distance=Distance.COSINE
+                )
+            )
+            print(f"컬렉션 '{collection}' 생성 완료.")
 
         # --- Knowledge Graph Client ---
         NEO4J_URI = os.getenv("NEO4J_URI")
@@ -90,7 +104,7 @@ class PdfIngestionPipeline:
 
             if target_file_name_pattern.match(file_name):
                 if len(collections_to_save) > 0:
-                    chunks = self.markdown_chunker.chunk_markdown_file(file_path)
+                    chunks = self.markdown_chunker.chunk_markdown_file(file_path, file_uuid, collections_to_save)
 
                     return {
                         "chunks": chunks,
@@ -108,7 +122,7 @@ class PdfIngestionPipeline:
         """
         청크를 가져와서 인덱싱 후 저장
         """
-        self.indexing_db_client.index_chunks(chunks, collections)
+        self.elasticsearch_indexer.index_chunks(chunks, collections)
 
 
     def _embedding(self, chunks: list[dict], collections: list[str]):
@@ -120,7 +134,7 @@ class PdfIngestionPipeline:
 
     def run_pdf_ingestion_pipeline(self, file_uuid: str, collections: list[str]):
         """
-        pdf를 가져와서 청킹, 인덱싱, 임베딩, 그래프 추출까지 한 함수에서 하는 함수
+        pdf를 가져와서 청킹, 인덱싱, 임베딩까지 한 함수에서 하는 함수
         """
 
         try:
@@ -135,10 +149,7 @@ class PdfIngestionPipeline:
             print(e)
             return
 
-    
-    if __name__ == "__main__":
-        from retriever.pdf_ingestion_pipeline import PdfIngestionPipeline
 
-
-        pdf_ingestion_pipeline = PdfIngestionPipeline()
-        pdf_ingestion_pipeline.run_pdf_ingestion_pipeline("5bc0c676-018f-46de-bb0d-0103ff9c388c", ["msds"])
+if __name__ == "__main__":
+    pdf_ingestion_pipeline = PdfIngestionPipeline()
+    pdf_ingestion_pipeline.run_pdf_ingestion_pipeline("5bc0c676-018f-46de-bb0d-0103ff9c388c", ["msds"])
