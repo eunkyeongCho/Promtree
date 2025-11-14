@@ -236,16 +236,27 @@ class Neo4jKnowledgeGraph:
                     self.neo4j_driver.execute_query(
                         """
                         MERGE (source:Entity {name: $source_name})
-                        ON MATCH SET source.alias = apoc.coll.toSet(source.alias + $source_alias),
-                        source.file_info = apoc.map.merge(source.file_info, $source_file_info)
-                        ON CREATE SET source.alias = $source_alias,
-                        source.file_info = $source_file_info
+
+                        ON MATCH SET
+                            source.alias = apoc.coll.toSet(source.alias + $source_alias),
+                            source.file_info = apoc.map.merge(source.file_info, $source_file_info)
+
+                        ON CREATE SET
+                            target.alias = $target_alias,
+                            source.file_info = $source_file_info
+
                         MERGE (target:Entity {name: $target_name})
-                        ON MATCH SET target.alias = apoc.coll.toSet(target.alias + $target_alias),
-                        source.file_info = apoc.map.merge(target.file_info, $target_file_info)
-                        ON CREATE SET target.alias = $target_alias,
-                        source.file_info = $target_file_info
+
+                        ON MATCH SET
+                            target.alias = apoc.coll.toSet(target.alias + $target_alias),
+                            source.file_info = apoc.map.merge(target.file_info, $target_file_info)
+
+                        ON CREATE SET
+                            target.alias = $target_alias,
+                            source.file_info = $target_file_info
+
                         MERGE (source)-[r:`%s`]->(target)
+
                         ON CREATE SET r.confidence = $confidence
                         ON MATCH SET r.confidence = max(r.confidence, $confidence)
                         """
@@ -369,9 +380,22 @@ def main():
     Neo4jKnowledgeGraph 통해 그래프 저장 및 검색을 테스트하는 코드입니다.
     먼저 테스트하고 싶은 md 문서의 청킹을 완료한 후에 실행해주세요.
     """
-    knowledge_graph = Neo4jKnowledgeGraph()
+    from retriever.chunker.markdown_chunker import MarkdownChunker
 
-    asyncio.run(knowledge_graph.async_ingest_file("Copy of 5bc0c676-018f-46de-bb0d-0103ff9c388c")) # 청킹한 문서 이름으로 바꿔주세요
+
+    BASE_DIR = Path(__file__).resolve().parents[1]  # root 경로
+    markdown_sample_data_folder_path = BASE_DIR / "retriever" / "markdown_sample_data" # markdown 샘플 데이터 경로
+
+    for markdown_file_path in markdown_sample_data_folder_path.rglob("*.md"): # md 파일만 순회돌기
+        with open(markdown_file_path, "r", encoding="utf-8") as f:  # 파일로부터 md 문자열을 읽어옵니다.
+            md = f.read()
+
+        markdown_chunker = MarkdownChunker()
+        chunks = markdown_chunker.chunk_markdown_file(md, "5bc0c676-018f-46de-bb0d-0103ff9c388c", "5bc0c676-018f-46de-bb0d-0103ff9c388c_3M-1509-DC-Polyethylene-Tape-TIS-Jun13", ["msds"])
+    
+    knowledge_graph = Neo4jKnowledgeGraph()
+    asyncio.run(knowledge_graph.async_ingest_chunks(chunks))
+
     # knowledge_graph.search_graph("ISA Kit는 무엇을 테스트하나요?") # 검색 대상인 문서에 대한 질문으로 바꿔주세요
     knowledge_graph.generate_answer("ISA Kit는 무엇을 테스트하나요?")
     knowledge_graph.close()
