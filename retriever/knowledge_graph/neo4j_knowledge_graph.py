@@ -350,14 +350,41 @@ class Neo4jKnowledgeGraph:
             답변생성
             """
 
-            results = self.search_graph(query)
+            results = self.async_search_graph(query)
 
             prompt = f"""
-            당신은 질문에 답변하는 AI 어시스턴트입니다.
-            벡터 검색 결과와 그래프 검색 결과를 모두 참고하여 정확하고 포괄적인 답변을 제공하세요.
-            
-            질문: {query}
-            그래프 검색 결과: {results}
+            당신은 삼성전자 생산기술연구소의 소재 물성 문서 기반으로 근거 중심의 정확한 답변을 생성하는 전문 어시스턴트입니다.
+            당신의 모든 답변은 아래 제공된 문서(JSON 형태)의 내용만을 기반으로 해야 합니다. 
+            추론을 할 때도 반드시 문서의 내용을 근거로 해야 하며, 문서에 없는 내용은 절대 추측하지 말고 모르면 모른다고 하세요.
+            -----------------------------
+            [사용자 질문]
+            {query}
+            -----------------------------
+            [그래프 검색 결과]
+            {results}
+            -----------------------------
+            [지침]
+            1. 반드시 문서(JSON) 속 text 내용을 기반으로만 답변하세요.
+            2. 답변에는 다음 두 가지를 반드시 포함해야 합니다:
+            (A) 질문에 대한 명확한 답변
+            (B) 답변에 사용된 근거의 출처 (file_uuid(파일 고유 UUID), file_name(파일명), page_num(페이지 번호), collections(청크 컬렉션 이름))
+            3. 여러 문서를 참조했다면 출처를 모두 표기하세요.
+            4. 문서에 없는 정보는 "문서에 해당 정보가 없습니다."라고 답하세요.
+            5. JSON 안의 구조(key 이름)는 절대 변경하지 말고 그대로 사용하세요.
+            6. image / link 타입 chunk는 metadata를 요약해 텍스트처럼 다뤄도 됩니다.
+            -----------------------------
+            [출력 형식]
+            다음 형식으로만 답변하세요:
+
+            {{
+                "answer" : "답변",
+                "file_info" : {{
+                    "file_uuid" : "백엔드에서 넘어오는 Doc ID",
+                    "file_name" : "파일 이름",
+                    "page_num" : 페이지 번호 정수 배열,
+                    "collections" : 청크가 속한 컬렉션 이름 배열
+                }}
+            }}
             """
 
             # 답변 요청
@@ -383,22 +410,25 @@ def main():
     from retriever.chunker.markdown_chunker import MarkdownChunker
 
 
-    BASE_DIR = Path(__file__).resolve().parents[1]  # root 경로
+    BASE_DIR = Path(__file__).resolve().parents[2]  # root 경로
     markdown_sample_data_folder_path = BASE_DIR / "retriever" / "markdown_sample_data" # markdown 샘플 데이터 경로
+
+    print("📂 Searching md files in:", markdown_sample_data_folder_path)
 
     for markdown_file_path in markdown_sample_data_folder_path.rglob("*.md"): # md 파일만 순회돌기
         with open(markdown_file_path, "r", encoding="utf-8") as f:  # 파일로부터 md 문자열을 읽어옵니다.
             md = f.read()
 
-        markdown_chunker = MarkdownChunker()
-        chunks = markdown_chunker.chunk_markdown_file(md, "5bc0c676-018f-46de-bb0d-0103ff9c388c", "5bc0c676-018f-46de-bb0d-0103ff9c388c_3M-1509-DC-Polyethylene-Tape-TIS-Jun13", ["msds"])
-    
-    knowledge_graph = Neo4jKnowledgeGraph()
-    asyncio.run(knowledge_graph.async_ingest_chunks(chunks))
+            markdown_chunker = MarkdownChunker()
 
-    # knowledge_graph.search_graph("ISA Kit는 무엇을 테스트하나요?") # 검색 대상인 문서에 대한 질문으로 바꿔주세요
-    knowledge_graph.generate_answer("ISA Kit는 무엇을 테스트하나요?")
-    knowledge_graph.close()
+            chunks = markdown_chunker.chunk_markdown_file(md, "5bc0c676-018f-46de-bb0d-0103ff9c388c", "5bc0c676-018f-46de-bb0d-0103ff9c388c_3M-1509-DC-Polyethylene-Tape-TIS-Jun13", ["msds"])
+
+            knowledge_graph = Neo4jKnowledgeGraph()
+            asyncio.run(knowledge_graph.async_ingest_chunks(chunks))
+
+            # knowledge_graph.async_search_graph("ISA Kit는 무엇을 테스트하나요?") # 검색 대상인 문서에 대한 질문으로 바꿔주세요
+            knowledge_graph.generate_answer("ISA Kit는 무엇을 테스트하나요?")
+            knowledge_graph.close()
 
 if __name__ == "__main__":
     main()
