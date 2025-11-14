@@ -129,10 +129,10 @@ class Neo4jKnowledgeGraph:
 
     async def _async_extract_nodes_or_relationships(self, semaphore: asyncio.Semaphore, text_to_analyze: str, need_relationships: bool) -> list[dict[str, Any]]:
         """
-        주어진 문자열 배열에서 노드 또는 관계를 추출합니다.
+        주어진 문자열에서 노드 또는 관계를 추출합니다.
 
         Args:
-            content(list[str]): 노드 또는 관계를 추출해야할 문자열 배열
+            text_to_analyze(str): 노드 또는 관계를 추출해야할 문자열
             need_relationships(bool):
                 - True: 노드와 관계 모두 추출 (청크를 neo4j에 저장할 때 사용)
                 - False: 노드만 추출 (쿼리를 받아서 그래프를 검색할 때 사용)
@@ -173,13 +173,12 @@ class Neo4jKnowledgeGraph:
                 return []
 
     
-    # file_name을 받아서, MongoDB에서 해당 청크들을 찾아서, 반복문을 돌면서 각각 노드와 관계를 추출하고, neo4j에 저장하는 함수(저장할 때 merge 사용)
     async def async_ingest_chunks(self, chunks: list[dict]) -> bool:
         """
         청크들을 직접 매개값으로 받고 chunk 내용을 기반으로 노드/관계를 생성하여 Neo4j에 MERGE 합니다.
 
         Args:
-            chunks(list[str]): 청크 배열
+            chunks(list[dict]): 청크 배열
 
         Returns:
             bool: 하나 이상의 chunk가 정상 저장되면 True, 그렇지 않으면 False
@@ -236,9 +235,19 @@ class Neo4jKnowledgeGraph:
                 try:
                     self.neo4j_driver.execute_query(
                         """
-                        MERGE (source:Entity {name: $source_name, alias: $source_alias, file_info: $source_file_info})
-                        MERGE (target:Entity {name: $target_name, alias: $target_alias, file_info: $target_file_info})
-                        MERGE (source)-[relationship:`%s` {confidence: $confidence}]->(target)
+                        MERGE (source:Entity {name: $source_name})
+                        ON MATCH SET source.alias = apoc.coll.toSet(source.alias + $source_alias),
+                        source.file_info = apoc.map.merge(source.file_info, $source_file_info)
+                        ON CREATE SET source.alias = $source_alias,
+                        source.file_info = $source_file_info
+                        MERGE (target:Entity {name: $target_name})
+                        ON MATCH SET target.alias = apoc.coll.toSet(target.alias + $target_alias),
+                        source.file_info = apoc.map.merge(target.file_info, $target_file_info)
+                        ON CREATE SET target.alias = $target_alias,
+                        source.file_info = $target_file_info
+                        MERGE (source)-[r:`%s`]->(target)
+                        ON CREATE SET r.confidence = $confidence
+                        ON MATCH SET r.confidence = max(r.confidence, $confidence)
                         """
                         % relation_description,
                         source_name=nodes_and_relationship["source_node"]["name"],
@@ -251,6 +260,7 @@ class Neo4jKnowledgeGraph:
                         database_="neo4j"  # 무료 버전은 이름이 neo4j인 데이터베이스 하나만 사용 가능
                     )
                     save_success_count += 1
+
                 except Neo4jError as e:
                     print(f"❌ Failed to insert into Neo4j : {e.__cause__}")
                     save_fail_count += 1
