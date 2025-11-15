@@ -49,6 +49,7 @@ def chunk_embedding_and_upsert(chunks: List[dict], model: SentenceTransformer, c
         print(json.dumps({
             "id": point.id,
             "vector_dim": len(point.vector),
+            "vector": point.vector.tolist(), 
             "payload": point.payload
         }, ensure_ascii=False, indent=2))
 

@@ -101,8 +101,13 @@ services:
     environment:
       - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_PLUGINS=["apoc"]
     volumes:
       - "neo4j_data:/usr/share/neo4j/data:z"
+      - "./db/neo4j/plugins:/plugins:z"
     healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:7474"]
         interval: 10s
