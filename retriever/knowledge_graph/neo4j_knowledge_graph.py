@@ -45,7 +45,7 @@ class Neo4jKnowledgeGraph:
             print(f"Connection failed: {e.__cause__}")  # Neo4jError가 제공하는 __cause__ 속성이 에러 메세지가 자세하므로 이를 출력
 
         self.PROMPT_FOR_NODES_AND_RELATIONSHIPS = """당신은 RAG의 Knowledge Graph를 구축하기 위해, 주어진 문자열에서 주요개념과 그 관계를 추출하는 전문가입니다.
-        아래 JSON 형식을 따라 두개의 주요개념과 그 둘 사이의 관계를 추출하세요.
+        아래 JSON 형식을 따라 두개의 주요개념과 그 둘 사이의 관계를 최대한 많이 추출하세요.
 
         [답변형식]
         [{{
@@ -161,15 +161,15 @@ class Neo4jKnowledgeGraph:
                 if "application/json" in content_type:
                     raw_data = response.json()
                     data = raw_data['response']
-                    print(f"🔍 LLM response: {json.loads(data)}")
+                    print(f"🔍 [async_extract_nodes_or_relationships] LLM response: {json.loads(data)}")
                     return json.loads(data)
                 else:
                     raw_data = response.text
-                    print(f"⚠️ LLM Message: {raw_data}")
+                    print(f"⚠️ [async_extract_nodes_or_relationships] LLM Message: {raw_data}")
                     return raw_data
 
             except Exception as e:
-                print(f"❌ LLM async request failed: {e}")
+                print(f"❌ [async_extract_nodes_or_relationships] LLM async request failed: {e}")
                 return []
 
     
@@ -185,7 +185,7 @@ class Neo4jKnowledgeGraph:
         """
 
         if not chunks:
-            print("⚠️ No chunks provided.")
+            print("⚠️ [async_ingest_chunks] No chunks provided.")
             return False
 
         extract_success_count = 0  # 추출에 성공한
@@ -203,22 +203,22 @@ class Neo4jKnowledgeGraph:
                 text_to_analyze = chunk.get("metadata", "")
 
             if not text_to_analyze:
-                print("⚠️ Skipping chunk with empty content.")
+                print("⚠️ [async_ingest_chunks]Skipping chunk with empty content.")
                 continue
 
             tasks.append(self._async_extract_nodes_or_relationships(semaphore, text_to_analyze, True))
 
-        print(f"🚀 Sending {len(tasks)} LLM requests concurrently... (max concurrent: {self.MAX_CONCURRENT})")
-        print(f"🔁 LLM responses received. Inserting into Neo4j...")
+        print(f"🚀 [async_ingest_chunks] Sending {len(tasks)} LLM requests concurrently... (max concurrent: {self.MAX_CONCURRENT})")
+        print(f"🔁 [async_ingest_chunks] LLM responses received. Inserting into Neo4j...")
 
         all_chunks_nodes_and_relationships = await asyncio.gather(*tasks, return_exceptions=True)
 
         for i, result in enumerate(all_chunks_nodes_and_relationships):
             if isinstance(result, Exception):
-                print(f"❌ Task {i} failed with error: {result}")
+                print(f"❌ [async_ingest_chunks] Task {i} failed with error: {result}")
                 extract_fail_count += 1
             else:
-                print(f"✅ Task {i} succeeded, got {len(result)} relationships")
+                print(f"✅ [async_ingest_chunks] Task {i} succeeded, got {len(result)} relationships")
                 extract_success_count += 1
 
         for chunk_nodes_and_relationships in all_chunks_nodes_and_relationships:  # 바깥 list for문 돌면 list 하나씩 나옴!
@@ -229,60 +229,52 @@ class Neo4jKnowledgeGraph:
                 relation_description = nodes_and_relationship.get("relationship_description")
 
                 if not relation_description:
-                    print("⚠️ Skipping relationship without description.")
+                    print("⚠️ [async_ingest_chunks] Skipping relationship without description.")
                     continue
 
                 try:
                     self.neo4j_driver.execute_query(
-                        """
-                        MERGE (source:Entity {name: $source_name})
+                        f"""
+                        MERGE (source:Entity {{name: $source_name}})
+                        ON MATCH SET source.alias = apoc.coll.toSet(COALESCE(source.alias, []) + $source_alias)
+                        ON CREATE SET source.alias = $source_alias
 
-                        ON MATCH SET
-                            source.alias = apoc.coll.toSet(source.alias + $source_alias),
-                            source.file_info = apoc.map.merge(source.file_info, $source_file_info)
-
-                        ON CREATE SET
-                            target.alias = $target_alias,
-                            source.file_info = $source_file_info
-
-                        MERGE (target:Entity {name: $target_name})
-
-                        ON MATCH SET
-                            target.alias = apoc.coll.toSet(target.alias + $target_alias),
-                            source.file_info = apoc.map.merge(target.file_info, $target_file_info)
-
-                        ON CREATE SET
-                            target.alias = $target_alias,
-                            source.file_info = $target_file_info
-
+                        MERGE (target:Entity {{name: $target_name}})
+                        ON MATCH SET target.alias = apoc.coll.toSet(COALESCE(target.alias, []) + $target_alias)
+                        ON CREATE SET target.alias = $target_alias
+                        
                         MERGE (source)-[r:`%s`]->(target)
-
-                        ON CREATE SET r.confidence = $confidence
-                        ON MATCH SET r.confidence = max(r.confidence, $confidence)
+                        ON MATCH SET r.confidence = CASE 
+                                WHEN r.confidence < $confidence 
+                                THEN $confidence 
+                                ELSE r.confidence 
+                            END,
+                            r.file_info = COALESCE(r.file_info, {{}}) + $file_info
+                        ON CREATE SET r.confidence = $confidence, r.file_info = $file_info
                         """
                         % relation_description,
                         source_name=nodes_and_relationship["source_node"]["name"],
                         source_alias=nodes_and_relationship["source_node"].get("alias", []),
-                        source_file_info=json.dumps(chunk.get("file_info", {})),
                         target_name=nodes_and_relationship["target_node"]["name"],
                         target_alias=nodes_and_relationship["target_node"].get("alias", []),
-                        target_file_info=json.dumps(chunk.get("file_info", {})),
                         confidence=float(nodes_and_relationship["confidence"]),
+                        file_info=json.dumps(chunk.get("file_info", {})),
                         database_="neo4j"  # 무료 버전은 이름이 neo4j인 데이터베이스 하나만 사용 가능
                     )
                     save_success_count += 1
 
                 except Neo4jError as e:
-                    print(f"❌ Failed to insert into Neo4j : {e.__cause__}")
+                    print(f"❌ [async_ingest_chunks] Failed to insert into Neo4j : {e.__cause__}")
+                    print(f"❌ [async_ingest_chunks] Failed to insert into Neo4j (Detail...) : {e}")
                     save_fail_count += 1
                     continue
 
         if save_success_count > 0:
-            print(f"✅ Successfully extracted {extract_success_count}/{extract_success_count + extract_fail_count} from chunks.")
-            print(f"✅ Successfully inserted {save_success_count}/{save_success_count + save_fail_count} relationships into Neo4j.")
+            print(f"✅ [async_ingest_chunks] Successfully extracted {extract_success_count}/{extract_success_count + extract_fail_count} from chunks.")
+            print(f"✅ [async_ingest_chunks] Successfully inserted {save_success_count}/{save_success_count + save_fail_count} relationships into Neo4j.")
             return True
         else:
-            print("❌ No relationships were inserted into Neo4j.")
+            print("❌ [async_ingest_chunks] No relationships were inserted into Neo4j.")
             return False
 
     
@@ -301,29 +293,28 @@ class Neo4jKnowledgeGraph:
                         OR ANY(alias_item IN source.alias WHERE alias_item = $node_name)
                         OR target.name = $node_name
                         OR ANY(alias_item IN target.alias WHERE alias_item = $node_name)
-                    RETURN source.name AS source,
-                        source.file_info AS source_file_info,
-                        type(r) AS relationship_description,
+                    RETURN
+                        source.name AS source,
                         target.name AS target,
-                        target.file_info AS target_file_info,
-                        r.confidence AS confidence
+                        type(r) AS relationship_description,
+                        r.confidence AS confidence,
+                        r.file_info AS file_info
                     """,
                     node_name=node['name'],
                     database_="neo4j"
                 )
             except Neo4jError as e:
-                print(f"❌ Failed to search graph(Neo4jError): {e.__cause__}")
+                print(f"❌ [async_search_graph] Failed to search graph(Neo4jError): {e.__cause__}")
                 continue
 
             except Exception as e:
-                print(f"❌ Failed to search graph: {e}")
+                print(f"❌ [async_search_graph] Failed to search graph: {e}")
                 continue
 
             for record in records:
                 confidence_results.append({
                     "graph": record["source"] + " - " + record["relationship_description"] + " -> " + record["target"],
-                    "source_file_info": json.loads(record["source_file_info"]),
-                    "target_file_info": json.loads(record["target_file_info"]),
+                    "file_info": json.loads(record["file_info"]),
                     "confidence": float(record["confidence"])
                 })
 
@@ -334,23 +325,22 @@ class Neo4jKnowledgeGraph:
         for confidence_result in confidence_results:
             results.append({
                 "graph": confidence_result["graph"],
-                "source_file_info": confidence_result["source_file_info"],
-                "target_file_info": confidence_result["target_file_info"]
+                "file_info": confidence_result["file_info"]
             })
 
-            print(f"🔍 {confidence_result['graph']}")
-            print(f"Source File Info: {confidence_result['source_file_info']}")
-            print(f"Target File Info: {confidence_result['target_file_info']}")
-            print(f"Confidence: {confidence_result['confidence']}")
+            print("🔍 [async_search_graph] Results:")
+            print(f"graph: {confidence_result['graph']}")
+            print(f"file Info: {confidence_result['file_info']}")
+            print(f"confidence: {confidence_result['confidence']}")
 
         return results
 
-    def generate_answer(self, query: str) -> str:
+    async def generate_answer(self, query: str) -> str:
             """
             답변생성
             """
 
-            results = self.async_search_graph(query)
+            results = await self.async_search_graph(query)
 
             prompt = f"""
             당신은 삼성전자 생산기술연구소의 소재 물성 문서 기반으로 근거 중심의 정확한 답변을 생성하는 전문 어시스턴트입니다.
@@ -369,7 +359,7 @@ class Neo4jKnowledgeGraph:
             (A) 질문에 대한 명확한 답변
             (B) 답변에 사용된 근거의 출처 (file_uuid(파일 고유 UUID), file_name(파일명), page_num(페이지 번호), collections(청크 컬렉션 이름))
             3. 여러 문서를 참조했다면 출처를 모두 표기하세요.
-            4. 문서에 없는 정보는 "문서에 해당 정보가 없습니다."라고 답하세요.
+            4. 문서에 없는 정보는 "문서에 해당 정보가 없습니다."라고 답하세요. 이때에는 file_info에 대한 내용을 비워두세요.
             5. JSON 안의 구조(key 이름)는 절대 변경하지 말고 그대로 사용하세요.
             6. image / link 타입 chunk는 metadata를 요약해 텍스트처럼 다뤄도 됩니다.
             -----------------------------
@@ -398,11 +388,11 @@ class Neo4jKnowledgeGraph:
             except requests.RequestException as e:
                 print(f"HTTP request failed: {e}")
 
-            print(f"🔍 LLM response: {response.json()['response']}")
+            print(f"🔍 [generate_answer] LLM response: {response.json()['response']}")
             return response.json()['response']
 
 
-def main():
+async def main():
     """
     Neo4jKnowledgeGraph 통해 그래프 저장 및 검색을 테스트하는 코드입니다.
     먼저 테스트하고 싶은 md 문서의 청킹을 완료한 후에 실행해주세요.
@@ -424,11 +414,11 @@ def main():
             chunks = markdown_chunker.chunk_markdown_file(md, "5bc0c676-018f-46de-bb0d-0103ff9c388c", "5bc0c676-018f-46de-bb0d-0103ff9c388c_3M-1509-DC-Polyethylene-Tape-TIS-Jun13", ["msds"])
 
             knowledge_graph = Neo4jKnowledgeGraph()
-            asyncio.run(knowledge_graph.async_ingest_chunks(chunks))
+            await knowledge_graph.async_ingest_chunks(chunks)
 
             # knowledge_graph.async_search_graph("ISA Kit는 무엇을 테스트하나요?") # 검색 대상인 문서에 대한 질문으로 바꿔주세요
-            knowledge_graph.generate_answer("ISA Kit는 무엇을 테스트하나요?")
+            await knowledge_graph.generate_answer("아세톤의 권고용도는?")
             knowledge_graph.close()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
