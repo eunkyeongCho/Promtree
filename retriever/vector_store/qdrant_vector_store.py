@@ -61,8 +61,6 @@ def search_similar_chunks(client: QdrantClient, qv, collections: list[str], top_
         qv = qv.tolist() # qdrant는 내부적으로 list 형태의 벡터를 기대하기 때문에, list로 변환
 
     combined_results = []
-    
-    print(f"\n🔍 Vector Search Results (Top-{len(results)})\n")
 
     for collection in collections:
         result = client.query_points(
