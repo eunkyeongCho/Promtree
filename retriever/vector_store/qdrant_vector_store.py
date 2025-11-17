@@ -62,8 +62,6 @@ def search_similar_chunks(client: QdrantClient, qv, collections: list[str], top_
 
     combined_results = []
     
-    print(f"\n🔍 Vector Search Results (Top-{len(results)})\n")
-
     for collection in collections:
         result = client.query_points(
             collection_name=collection,
