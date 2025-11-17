@@ -24,13 +24,13 @@ class MarkdownChunker:
         BASE_DIR = Path(__file__).resolve().parents[2]  # root 경로
         load_dotenv(BASE_DIR / "common" / ".env")
 
-        USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME", "root")
-        PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD", "example")
-        HOST = os.getenv("MONGO_HOST", "localhost")
-        PORT = int(os.getenv("MONGO_PORT", 27017))
+        # USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME", "root")
+        # PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD", "example")
+        # HOST = os.getenv("MONGO_HOST", "localhost")
+        # PORT = int(os.getenv("MONGO_PORT", 27017))
 
-        self.mongodb_client = MongoClient(f"mongodb://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/")
-        self.chunk_collection = self.mongodb_client["chunk_db"]["chunk_collection"]
+        # self.mongodb_client = MongoClient(f"mongodb://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/")
+        # self.chunk_collection = self.mongodb_client["chunk_db"]["chunk_collection"]
 
 
     def get_pages_info(self, md: str) -> list:
