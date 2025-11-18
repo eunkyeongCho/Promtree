@@ -523,17 +523,18 @@ class MarkdownChunker:
             return False
 
 
-    def chunk_markdown_file(self, md: str, file_uuid: str, file_name: str, collections: list[str]) -> bool:
+    def chunk_markdown_file(self, md: str, file_uuid: str, file_name: str, collections: list[str]) -> list[dict]:
         """
-        주어진 markdown 텍스트 파일을 chunking하고, 완성된 청크들을 Chunk DB에 저장합니다.
+        주어진 markdown 텍스트 파일을 chunking하고, 완성된 청크들을 반환합니다.
 
         Args:
-            file_path(Path): 처리할 markdown 파일 경로
+            md(str): 처리할 markdown 텍스트
+            file_uuid(str): 파일 UUID
+            file_name(str): 파일 이름
+            collections(list[str]): 청크를 저장할 collection 리스트
 
         Returns:
-            bool: chunking 프로세스 성공여부
-                - True: chunking 및 DB 저장 성공
-                - False: chunking 과정 또는 저장 과정에서 오류 발생
+            list[dict]: 완성된 청크 리스트
         """
 
         try:
@@ -576,6 +577,69 @@ class MarkdownChunker:
             print(f"🎉 Chunking succeeded for {file_name}(file_uuid: {file_uuid})")
 
             return chunks
+
+        except Exception as e:
+            print(f"😢 Chunking failed for {file_name}(file_uuid: {file_uuid}): {e}")
+            traceback.print_exc()
+            return None
+
+    
+    def chunk_markdown_text_and_save_to_mongodb(self, md: str, file_uuid: str, file_name: str, collections: list[str]) -> bool:
+        """
+        주어진 markdown 텍스트 파일을 chunking하고, 완성된 청크들을 Mongo DB에 저장합니다.
+
+        Args:
+            md(str): 처리할 markdown 텍스트
+            file_uuid(str): 파일 UUID
+            file_name(str): 파일 이름
+            collections(list[str]): 청크를 저장할 collection 리스트
+
+        Returns:
+            bool: chunking 프로세스 성공여부
+                - True: chunking 및 DB 저장 성공
+                - False: chunking 과정 또는 저장 과정에서 오류 발생
+        """
+
+        try:
+            pages_info = self.get_pages_info(md) # page 인덱스 범위 정보 추출
+
+            md_without_page = self.remove_page(md) # >>> page 마커 제거
+
+            image_dict = self.generate_image_chunk(md_without_page) # image 타입 처리
+            md_without_image = image_dict['md_without_image']
+            raw_chunks = image_dict['image_raw_chunks'].copy()
+
+            link_dict = self.generate_link_chunk(md_without_image) # link 타입 처리
+            md_without_link = link_dict['md_without_link']
+            raw_chunks = link_dict['link_raw_chunks'].copy()
+
+            html_table_dict = self.generate_html_table_chunk(md_without_link) # table 타입 처리
+            md_without_html_table = html_table_dict['md_without_html_table']
+            raw_chunks.extend(html_table_dict['html_table_raw_chunks'])
+
+            text_raw_chunks = self.generate_text_chunk(md_without_html_table) # text 타입 처리
+            raw_chunks.extend(text_raw_chunks)
+
+            file_info = {
+                "file_uuid": file_uuid,
+                "file_name": file_name,
+                "collections": collections
+            }
+            chunks = self.attach_file_info(raw_chunks, pages_info, file_info) # raw chunks에 page_num, file_name 추가
+
+            print("\n=== Chunk Preview (5 items) ===")
+            for i, c in enumerate(chunks[:5], 1):
+                print(f"\n--- Chunk {i} ---")
+                print(f"type        : {c.get('type')}")
+                print(f"content     : {str(c.get('content'))[:200]}...")
+                print(f"metadata : {c.get('metadata')}")
+                print(f"file_info   : {c.get('file_info', {})}")
+                
+            self.save_chunks_to_db(chunks) # 청크들 DB에 저장
+
+            print(f"🎉 Chunking succeeded for {file_name}(file_uuid: {file_uuid})")
+
+            return True
 
         except Exception as e:
             print(f"😢 Chunking failed for {file_name}(file_uuid: {file_uuid}): {e}")
