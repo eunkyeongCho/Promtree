@@ -4,19 +4,24 @@
 역할:
 - TDS 물성 추출 메인 파이프라인
 - MongoDB 마크다운 → 물성 추출 → PostgreSQL 저장
-- 정규식 + LLM 병렬 추출 전략 (선택 가능)
+- LLM 우선 + Regex 보완 하이브리드 전략
+
+추출 전략:
+    1. LLM 추출 (RunPod Ollama qwen2.5:7b) - 컨텍스트 이해, 높은 정확도
+    2. Regex 추출 - LLM 누락 물성 보완 및 검증
+    3. 하이브리드 병합 - LLM 우선, Regex로 추가 물성 보완
 
 실행:
     python pipeline_smart.py
 
 옵션:
-    use_llm_fallback=True   → 정규식 + LLM 병렬 (정확, 느림)
-    use_llm_fallback=False  → 정규식만 (빠름, Mock 데이터 충분)
+    use_llm_fallback=True   → LLM 우선 + Regex 보완 (정확, 느림)
+    use_llm_fallback=False  → Regex만 (빠름, Mock 데이터 충분)
 
 출력:
     - MongoDB temp_extraction 컬렉션에 임시 저장
     - PostgreSQL tds_properties 테이블에 최종 저장
-    - 문서별 추출 결과 요약 출력
+    - 문서별 추출 결과 요약 (LLM vs Regex 기여도 포함)
 """
 
 import sys
@@ -26,7 +31,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from db_connection import get_mongodb, get_postgresql
 from extractor import detect_all_properties
 from create_pg_tables import ensure_column_exists
-from llm_agent_ollama import PropertyExtractionAgent
+from llm_agent_langchain import PropertyExtractionAgent  # LangChain LCEL 버전으로 변경
 from typing import List, Dict
 
 
@@ -138,42 +143,47 @@ def process_document_smart(doc_id: str, mongodb, postgres_conn, use_llm_fallback
 
     print(f"파일명: {doc.get('file_name', 'N/A')}")
 
-    # 2. 정규식 추출
-    regex_properties = detect_all_properties(doc['content'])
-    print(f"\n✅ 정규식 추출: {len(regex_properties)}개")
-
-    # 3. LLM 추출 (항상 실행)
+    # 2. LLM 추출 먼저 실행 (RunPod Ollama)
     if use_llm_fallback:
-        print(f"🤖 LLM 추출 시작... (병렬 추출 전략)")
+        print(f"🤖 LLM 추출 시작... (RunPod Ollama 우선)")
 
         try:
-            llm_agent = PropertyExtractionAgent(model="qwen2.5:7b")
+            llm_agent = PropertyExtractionAgent()  # RunPod 기본값
             llm_properties = llm_agent.extract_properties(doc['content'])
 
             if llm_properties:
                 print(f"✅ LLM 추출: {len(llm_properties)}개")
-
-                # 병합 (정규식 + LLM, 중복 제거)
-                properties = merge_properties(regex_properties, llm_properties)
-
-                regex_only = len(regex_properties)
-                llm_added = len(properties) - regex_only
-
-                print(f"📊 병합 결과:")
-                print(f"   - 정규식: {regex_only}개")
-                print(f"   - LLM 추가: {llm_added}개")
-                print(f"   - 최종: {len(properties)}개")
             else:
-                print(f"⚠️  LLM 추출 실패 - 정규식 결과만 사용")
-                properties = regex_properties
+                print(f"⚠️  LLM 추출 결과 없음")
+                llm_properties = []
 
         except Exception as e:
             print(f"❌ LLM 오류: {e}")
-            print(f"   → 정규식 결과만 사용합니다")
-            properties = regex_properties
+            llm_properties = []
 
     else:
-        print(f"⚠️  LLM 비활성화 - 정규식 결과만 사용")
+        print(f"⚠️  LLM 비활성화")
+        llm_properties = []
+
+    # 3. 정규식 추출 (검증 및 보완)
+    regex_properties = detect_all_properties(doc['content'])
+    print(f"\n✅ 정규식 추출: {len(regex_properties)}개 (검증/보완)")
+
+    # 4. 병합 (LLM 우선, Regex로 보완)
+    if llm_properties:
+        # LLM 결과를 기반으로 하되, Regex로 추가 물성 보완
+        properties = merge_properties(llm_properties, regex_properties)
+
+        llm_only = len(llm_properties)
+        regex_added = len(properties) - llm_only
+
+        print(f"📊 병합 결과:")
+        print(f"   - LLM: {llm_only}개")
+        print(f"   - Regex 추가: {regex_added}개")
+        print(f"   - 최종: {len(properties)}개")
+    else:
+        # LLM 실패 시 Regex만 사용
+        print(f"⚠️  LLM 실패 - 정규식 결과만 사용")
         properties = regex_properties
 
     # 추출된 물성 출력
@@ -306,7 +316,7 @@ if __name__ == "__main__":
         mongodb,
         postgres,
         doc_filter={'document_id': {'$regex': '^MOCK_'}},
-        use_llm_fallback=False  # ← 정규식만 (빠름, 1초)
+        use_llm_fallback=True  # ← 정규식 + RunPod LLM (정확도 향상)
     )
 
     if postgres is not None:

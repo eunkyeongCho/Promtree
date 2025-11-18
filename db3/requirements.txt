@@ -7,3 +7,9 @@ pymongo==4.15.3
 python-dotenv==1.2.1
 requests==2.32.5
 urllib3==2.5.0
+
+# LangChain packages (호환되는 버전)
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langchain-ollama>=1.0.0
