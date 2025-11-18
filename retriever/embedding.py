@@ -17,8 +17,19 @@ def init():
 
     # Qdrant 클라이언트 초기화
     client = QdrantClient(url="http://localhost:6333")
-
+    collections = ["msds", "tds"]
+    for collection in collections:
+        client.recreate_collection(
+            collection_name=collection,
+            vectors_config=VectorParams(
+                size=1024,
+                distance=Distance.COSINE
+            )
+        )
+        print(f"컬렉션 '{collection}' 생성 완료.")
+    
     return model, client
+    
 
 def chunk_embedding_and_upsert(chunks: List[dict], model: SentenceTransformer, client: QdrantClient, collections: list[str]) -> None:
     """
@@ -49,7 +60,7 @@ def chunk_embedding_and_upsert(chunks: List[dict], model: SentenceTransformer, c
         print(json.dumps({
             "id": point.id,
             "vector_dim": len(point.vector),
-            "vector": point.vector.tolist(), 
+            "vector": point.vector[:10], 
             "payload": point.payload
         }, ensure_ascii=False, indent=2))
 
