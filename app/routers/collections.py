@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -24,13 +26,66 @@ from app.services.collection import (
     delete_collection_dir,
     delete_document_file,
     get_collection_dir,
-    mark_document_success,
     rename_collection_dir,
     save_pdf_file,
 )
+from app.services.pdf_preprocessing import PDFPreprocessing
 from app.utils.auth import get_current_user_email
 
 collection_router = APIRouter()
+
+
+async def process_document_background(document: CollectionDocument, pdf_path: Path) -> None:
+    """
+    백그라운드에서 PDF 전처리를 수행하고 상태를 업데이트합니다.
+    
+    Args:
+        document: 업데이트할 CollectionDocument 객체
+        pdf_path: 처리할 PDF 파일 경로
+    """
+    processor = None
+    try:
+        processor = PDFPreprocessing()
+        
+        # 1. PDF를 마크다운으로 변환 (동기 함수)
+        md_lines = await asyncio.to_thread(processor.pdf_to_md, pdf_path)
+        md_text = '\n'.join(md_lines)
+        
+        # 2. Core 데이터 추출 및 저장 (비동기 함수)
+        await processor.md_to_core(md_text, document.document_id)
+        
+        # 3. RAG 파이프라인 실행
+        # md_to_rag 내부의 비동기 부분을 직접 처리
+        doc = await processor._get_collection_document(document.document_id)
+        if doc:
+            coll_obj = await KnowledgeCollection.find_one({"collection_id": doc.collection_id})
+            if coll_obj:
+                # RAG 파이프라인 실행 (동기 함수)
+                await asyncio.to_thread(
+                    processor.rag_pipeline.run_pdf_ingestion_pipeline,
+                    md_text,
+                    document.document_id,
+                    doc.filename,
+                    [coll_obj.type],
+                )
+                print("임베딩, 인덱싱, 관계 추출 완료")
+        
+        # 성공 시 status 업데이트
+        document.status = "success"
+        await document.save()
+    except Exception as e:
+        # 실패 시 status 업데이트
+        print(f"PDF 전처리 실패 (document_id={document.document_id}): {e}")
+        traceback.print_exc()
+        try:
+            document.status = "failure"
+            await document.save()
+        except Exception as save_error:
+            print(f"상태 업데이트 실패: {save_error}")
+    finally:
+        # 리소스 정리
+        if processor:
+            processor.close()
 
 
 def _to_collection_response(model: KnowledgeCollection) -> CollectionResponse:
@@ -291,7 +346,8 @@ async def document_upload(
             status="processing",
         )
         await document.insert()
-        asyncio.create_task(mark_document_success(document))
+        # 백그라운드에서 PDF 전처리 실행
+        asyncio.create_task(process_document_background(document, saved_path))
         responses.append(document)
 
     return [_to_document_response(doc) for doc in responses]

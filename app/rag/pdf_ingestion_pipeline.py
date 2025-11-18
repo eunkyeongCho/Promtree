@@ -42,14 +42,17 @@ class PdfIngestionPipeline:
 
         collections = ["msds", "tds"]
         for collection in collections:
-            self.vector_db_client.recreate_collection(
-                collection_name=collection,
-                vectors_config=VectorParams(
-                    size=1024,
-                    distance=Distance.COSINE
+            if not self.vector_db_client.collection_exists(collection):
+                self.vector_db_client.create_collection(
+                    collection_name=collection,
+                    vectors_config=VectorParams(
+                        size=1024,
+                        distance=Distance.COSINE
+                    )
                 )
-            )
-            print(f"컬렉션 '{collection}' 생성 완료.")
+                print(f"컬렉션 '{collection}' 생성 완료.")
+            else:
+                print(f"컬렉션 '{collection}'이 이미 존재합니다. 기존 컬렉션을 사용합니다.")
 
         # --- Knowledge Graph Client ---
         NEO4J_URI = os.getenv("NEO4J_URI")

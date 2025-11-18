@@ -52,7 +52,7 @@ def parse_pdf(pdf_file: Path, converter: DocumentConverter, image_processor: met
     doc = result.document
 
     contents = []
-    # current_page = None
+    current_page = None
 
     for item, _ in doc.iterate_items():
         if hasattr(item, 'prov') and item.prov:

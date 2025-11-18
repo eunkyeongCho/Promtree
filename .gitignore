@@ -3,6 +3,9 @@ demo/images/
 demo/storage/
 parsing/pdfs
 
+### pdf ###
+/pdfs
+
 
 ### dotenv ###
 .env
