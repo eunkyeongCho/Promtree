@@ -536,7 +536,7 @@ class MarkdownChunker:
 
             link_dict = self.generate_link_chunk(md_without_image) # link 타입 처리
             md_without_link = link_dict['md_without_link']
-            raw_chunks = link_dict['link_raw_chunks'].copy()
+            raw_chunks.extend(link_dict['link_raw_chunks'])
 
             html_table_dict = self.generate_html_table_chunk(md_without_link) # table 타입 처리
             md_without_html_table = html_table_dict['md_without_html_table']
