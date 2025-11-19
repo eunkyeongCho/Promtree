@@ -79,8 +79,14 @@ class Search:
         if type == "keyword":
             normalized = []
             for es_result in chunks:
-                content = es_result.get("content", "")
+                chunk_type = es_result.get("type", "")
                 file_info = es_result.get("file_info", {})
+                
+                # image 타입인 경우 metadata를, 그 외에는 content를 사용
+                if chunk_type == "image":
+                    content = es_result.get("metadata", "")
+                else:
+                    content = es_result.get("content", "")
                 
                 normalized.append({
                     "content": content,
@@ -94,8 +100,14 @@ class Search:
             normalized = []
             for qdrant_result in chunks:
                 chunk = qdrant_result.get("chunk", {})
-                content = chunk.get("content", "")
+                chunk_type = chunk.get("type", "")
                 file_info = chunk.get("file_info", {})
+                
+                # image 타입인 경우 metadata를, 그 외에는 content를 사용
+                if chunk_type == "image":
+                    content = chunk.get("metadata", "")
+                else:
+                    content = chunk.get("content", "")
                 
                 normalized.append({
                     "content": content,
