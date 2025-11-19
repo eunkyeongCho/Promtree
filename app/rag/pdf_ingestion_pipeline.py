@@ -3,6 +3,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue, VectorParams, Distance
 from sentence_transformers import SentenceTransformer
 from neo4j import GraphDatabase
+from pymongo import MongoClient
 
 import os
 from dotenv import load_dotenv
@@ -39,8 +40,18 @@ class PdfIngestionPipeline:
 
         # --- Vector Database Client ---
         self.vector_db_client = QdrantClient(url="http://localhost:6333")
+        
 
-        collections = ["msds", "tds"]
+        # --- MongoDB Client (collection name 동기화) ---
+        mongo_url = (
+            f"mongodb://{os.getenv('MONGO_INITDB_ROOT_USERNAME')}:{os.getenv('MONGO_INITDB_ROOT_PASSWORD')}"
+            f"@{os.getenv('MONGO_HOST')}:{os.getenv('MONGO_PORT')}"
+        )
+        self.mongo_client = MongoClient(mongo_url)
+        self.mongo_db = self.mongo_client["promtree"]
+        self.collections_collection = self.mongo_db["collections"]
+        collections = self._fetch_collection_names()
+
         for collection in collections:
             if not self.vector_db_client.collection_exists(collection):
                 self.vector_db_client.create_collection(
@@ -59,6 +70,22 @@ class PdfIngestionPipeline:
         NEO4J_AUTH = ("neo4j", os.getenv("NEO4J_PASSWORD"))
 
         self.neo4j_driver = GraphDatabase.driver(NEO4J_URI, auth=NEO4J_AUTH)
+
+    def _fetch_collection_names(self) -> list[str]:
+        """
+        MongoDB에서 KnowledgeCollection 이름 목록을 가져옵니다.
+        """
+        try:
+            cursor = self.collections_collection.find({}, {"name": 1, "_id": 0})
+            names = sorted({doc["name"] for doc in cursor if doc.get("name")})
+            if not names:
+                print("⚠️ MongoDB에 등록된 collection이 없습니다. Qdrant 컬렉션 생성 단계는 건너뜁니다.")
+                return []
+            print(f"📁 MongoDB에서 {len(names)}개 collection 이름을 로드했습니다: {names}")
+            return names
+        except Exception as e:
+            print(f"⚠️ MongoDB collection 이름을 불러오지 못했습니다: {e}")
+            return []
 
     def _chunking(self, md: str, file_uuid: str, file_name: str, collections: list[str]) -> dict[str, list[str]]:
         """
