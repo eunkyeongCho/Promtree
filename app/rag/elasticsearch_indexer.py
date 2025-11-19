@@ -250,11 +250,12 @@ class ElasticsearchIndexer:
             self.ensure_index(collection)
 
         def generate_actions(target_index: str, chunks: List[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
-            for doc in chunks:
+            for idx, doc in enumerate(chunks):
+                file_uuid = (doc.get("file_info") or {}).get("file_uuid", "no_uuid")
                 yield {
                     "_op_type": "index",
                     "_index": target_index,
-                    "_id": str(doc.get("file_info").get("file_uuid", uuid.uuid4())),
+                    "_id": f"{file_uuid}_{idx}",       
                     "_source": self._normalize_source(doc, include_extended_fields=True)
                 }
 
