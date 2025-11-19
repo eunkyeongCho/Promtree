@@ -143,10 +143,17 @@ class Search:
            file_name = entry.get("file_name", "")
            page_nums = entry.get("page_nums") or [0]
            
+           if not doc_id:
+               # documentId가 없으면 viewer URL을 만들 수 없어 건너뜁니다.
+               # (이 경우에도 snippet/text는 ranking에는 사용됩니다.)
+               url = None
+           else:
+               url = f"/{doc_id}/view"
+
            group = grouped.setdefault(doc_id, {
                "title": file_name,
                "documentId": doc_id,
-               "url": f"/api/documents/{doc_id}/view",
+               "url": url,
                "chunks": []
            })
            

@@ -158,15 +158,15 @@ class PDFPreprocessing:
         async def get_doc_and_collection_info():
             doc = await self._get_collection_document(document_id)
             if not doc:
-                return None, None
+                return None, None, None
             
             coll_obj = await KnowledgeCollection.find_one({"collection_id": doc.collection_id})
             if not coll_obj:
-                return doc.filename, None
+                return doc.filename, None, None
             
-            return doc.filename, coll_obj.type
+            return doc.filename, coll_obj.type, coll_obj.name
         
-        file_name, collection_type = asyncio.run(get_doc_and_collection_info())
+        file_name, collection_type, collection_name = asyncio.run(get_doc_and_collection_info())
         
         if not file_name:
             print(f"Document(document_id={document_id})에서 filename을 가져올 수 없습니다.")
@@ -176,11 +176,15 @@ class PDFPreprocessing:
             print(f"collection_type을 확인할 수 없습니다.")
             return
         
+        if not collection_name:
+            print(f"collection_name을 확인할 수 없습니다.")
+            return
+        
         self.rag_pipeline.run_pdf_ingestion_pipeline(
             md_text,
             document_id,  # file_uuid로 사용
             file_name,
-            [collection_type],
+            [collection_name],
         )
         
         print("임베딩, 인덱싱, 관계 추출 완료")

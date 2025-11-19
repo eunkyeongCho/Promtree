@@ -50,7 +50,9 @@ class PdfIngestionPipeline:
         self.mongo_client = MongoClient(mongo_url)
         self.mongo_db = self.mongo_client["promtree"]
         self.collections_collection = self.mongo_db["collections"]
+        self.docs_collection = self.mongo_db["docs"]
         collections = self._fetch_collection_names()
+        self.available_collection_names = set(collections)
 
         for collection in collections:
             if not self.vector_db_client.collection_exists(collection):
@@ -86,6 +88,43 @@ class PdfIngestionPipeline:
         except Exception as e:
             print(f"⚠️ MongoDB collection 이름을 불러오지 못했습니다: {e}")
             return []
+
+    def _ensure_qdrant_collection(self, name: str) -> None:
+        if not name:
+            return
+        if self.vector_db_client.collection_exists(name):
+            self.available_collection_names.add(name)
+            return
+        self.vector_db_client.create_collection(
+            collection_name=name,
+            vectors_config=VectorParams(size=1024, distance=Distance.COSINE),
+        )
+        self.available_collection_names.add(name)
+        print(f"컬렉션 '{name}' 생성 완료.")
+
+    def _resolve_target_collections(self, file_uuid: str, requested: list[str]) -> list[str]:
+        """
+        업로드된 문서가 속한 실제 컬렉션 이름을 반환합니다.
+        """
+        requested = requested or []
+        resolved = [name for name in requested if name in self.available_collection_names]
+        if resolved:
+            return resolved
+
+        doc = self.docs_collection.find_one({"document_id": file_uuid})
+        if not doc:
+            print(f"⚠️ document_id={file_uuid} 에 해당하는 문서를 MongoDB에서 찾을 수 없습니다.")
+            return requested
+
+        collection = self.collections_collection.find_one({"collection_id": doc.get("collection_id")})
+        if collection and collection.get("name"):
+            name = collection["name"]
+            if name not in self.available_collection_names:
+                self._ensure_qdrant_collection(name)
+            return [name]
+
+        print(f"⚠️ document_id={file_uuid} 의 컬렉션 이름을 확인할 수 없습니다.")
+        return requested
 
     def _chunking(self, md: str, file_uuid: str, file_name: str, collections: list[str]) -> dict[str, list[str]]:
         """
@@ -155,6 +194,11 @@ class PdfIngestionPipeline:
         """
 
         try:
+            collections = self._resolve_target_collections(file_uuid, collections)
+            if not collections:
+                print(f"⚠️ document_id={file_uuid} 의 Qdrant 컬렉션명을 확인할 수 없어 파이프라인을 종료합니다.")
+                return
+
             chunks_and_collections = self._chunking(md, file_uuid, file_name, collections)
 
             if not chunks_and_collections:
