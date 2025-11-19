@@ -413,7 +413,7 @@ class Neo4jKnowledgeGraph:
                 })
 
         confidence_results.sort(key=lambda x: x["confidence"], reverse=True) # confidence 기준 내림차순 정렬
-        confidence_results = confidence_results[:20]
+        confidence_results = confidence_results[:10]
 
         results = [] # confidence 키 없앤 results
         for confidence_result in confidence_results:
