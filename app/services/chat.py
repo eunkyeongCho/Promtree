@@ -15,7 +15,7 @@ class ChatAIServiceError(RuntimeError):
 async def request_chat_ai(
     question: str,
     history: Sequence[dict[str, str]] | None = None,
-) -> tuple[str, list[str]]:
+) -> str:
     """
     외부 챗봇 API에 질문을 전달하고 응답을 받아옵니다.
 
@@ -24,7 +24,7 @@ async def request_chat_ai(
         history: 직전 대화 기록 (role, contents)
 
     Returns:
-        (answer, sources)
+        answer: 챗봇 응답 문자열
     """
 
     messages = [
@@ -65,9 +65,4 @@ async def request_chat_ai(
     if not isinstance(answer, str) or not answer.strip():
         raise ChatAIServiceError("챗봇 서비스가 유효한 답변을 반환하지 않았습니다.")
 
-    sources_raw = data.get("sources") or message.get("sources") or []
-    if not isinstance(sources_raw, list):
-        sources_raw = []
-    sources = [str(source) for source in sources_raw]
-
-    return answer, sources
+    return answer

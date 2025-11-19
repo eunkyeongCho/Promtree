@@ -151,15 +151,18 @@ class ElasticsearchIndexer:
         fi = doc.get("file_info") or {}
         page_num = fi.get("page_num")
 
-        # page_num을 int로 통일
-        if isinstance(page_num, list):
-            page_num = page_num[0] if page_num else 0
-        elif page_num is None:
-            page_num = 0
+        # page_num을 배열로 유지 (단일 값이면 배열로 변환)
+        if page_num is None:
+            page_num = []
+        elif not isinstance(page_num, list):
+            page_num = [int(page_num)]
+        else:
+            # 리스트인 경우 모든 값을 int로 변환
+            page_num = [int(p) for p in page_num if p is not None]
 
         file_info = {
             "file_name": (fi.get("file_name", "") or "").lower() if not include_extended_fields else fi.get("file_name", ""),
-            "page_num": int(page_num)
+            "page_num": page_num
         }
 
         if include_extended_fields:
@@ -340,7 +343,7 @@ class ElasticsearchIndexer:
             size=RETURN_SIZE,
             track_total_hits=False,
             _source_includes=[
-                "type", "content", "metadata", "file_info.file_name", "file_info.page_num"
+                "type", "content", "metadata", "file_info"
             ],
             body={
                 "query": es_query,

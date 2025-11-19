@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.models.chat import Chat
+from app.models.collection import KnowledgeCollection
 from app.models.message import Message
 from app.models.user import User
 from app.schemas.chat import (
@@ -18,6 +19,7 @@ from app.schemas.chat import (
 )
 from app.services.chat import ChatAIServiceError, request_chat_ai
 from app.utils.auth import get_current_user_email
+from app.rag.search import Search
 
 chat_router = APIRouter()
 
@@ -179,14 +181,42 @@ async def message_send(
         for msg in reversed(recent_messages)
     ]
 
+    
+    collections = []
+    if payload.collection_names is None or len(payload.collection_names) == 0:
+        # 모든 collection 조회 (모든 user의 collection 접근 가능)
+        all_collections = await KnowledgeCollection.find().to_list()
+        collections = [coll.name for coll in all_collections]
+    else:
+        # 지정된 collection 이름들로 조회 (모든 user의 collection 접근 가능)
+        for collection_name in payload.collection_names:
+            collection = await KnowledgeCollection.find_one(
+                KnowledgeCollection.name == collection_name
+            )
+            if collection:
+                collections.append(collection.name)
+    
+    collections = list(set(collections))  # 중복 제거
+
+    search_engine = Search()
+    sources = []
     try:
-        answer, sources = await request_chat_ai(payload.contents, history=history)
-    except ChatAIServiceError as exc:
-        await user_message.delete()  # rollback user message if AI fails
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
+        answer, sources = await search_engine.async_generate_rag_answer(
+            payload.contents,
+            collections=collections,
+            history=history,
+        )
+    except Exception as rag_exc:
+        # fallback to 기존 챗봇 서비스
+        try:
+            answer = await request_chat_ai(payload.contents, history=history)
+        except ChatAIServiceError as exc:
+            await user_message.delete()  # rollback user message if AI fails
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(exc),
+            ) from exc
+        sources = []
 
     bot_message = Message(
         chat_id=chat.chat_id,
