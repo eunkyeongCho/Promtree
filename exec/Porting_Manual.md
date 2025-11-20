@@ -35,7 +35,7 @@ uv run python main.py
 ```
 ### 3. 프론트엔드 시작 (터미널 2)
 ```bash
-cd frontend \&\& npm run dev
+cd frontend && npm run dev
 ```
 
 **접속:** http://localhost:5173
