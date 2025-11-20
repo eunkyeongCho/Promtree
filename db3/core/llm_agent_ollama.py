@@ -35,15 +35,17 @@ class PropertyExtractionAgent:
     Ollama 기반 물성 추출 Agent
     """
 
-    def __init__(self, model="qwen2.5:7b", base_url="http://localhost:11434"):
+    def __init__(self, model="gpt-oss:20b", base_url="https://bcb7tjvf0wm6jb-11434.proxy.runpod.net"):
         """
         Args:
-            model: Ollama 모델 이름 (llama3.1:8b, qwen2.5:7b 등)
-            base_url: Ollama 서버 주소
+            model: Ollama 모델 이름 (gpt-oss:20b, qwen2.5:7b 등)
+            base_url: Ollama 서버 주소 (RunPod 또는 localhost)
         """
         self.model = model
         self.base_url = base_url
         self.api_url = f"{base_url}/api/generate"
+        print(f"🌐 Using RunPod Ollama: {base_url}")
+        print(f"   Model: {model}")
 
     def extract_properties(self, markdown_text: str) -> List[Dict]:
         """

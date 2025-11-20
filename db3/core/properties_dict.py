@@ -142,6 +142,22 @@ PROPERTY_PATTERNS = {
         'names': ['Density', '밀도', '비중'],
         'units': ['g/cm³', 'g/cm3', 'kg/m³', 'kg/m3'],
         'keywords': ['density', '밀도', '비중']
+    },
+    # 테이프 관련 물성 추가
+    'Adhesion': {
+        'names': ['점착력', 'Adhesion', 'Adhesive Strength', '접착력'],
+        'units': ['Kg/25mm', 'kg/25mm', 'N/25mm', 'gf/25mm', 'kgf/inch'],
+        'keywords': ['점착력', 'adhesion', '접착']
+    },
+    'Thickness': {
+        'names': ['두께', 'Thickness', 'Total Thickness'],
+        'units': ['mm', 'μm', 'um', 'mil'],
+        'keywords': ['두께', 'thickness']
+    },
+    'HCR': {
+        'names': ['H.C.R', 'HCR', 'Heat Resistance', '내열성'],
+        'units': ['℃', '°C', 'C'],
+        'keywords': ['HCR', 'heat resistance', '내열']
     }
 }
 

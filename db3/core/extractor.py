@@ -24,6 +24,170 @@
 import re
 from typing import List, Dict, Optional
 from properties_dict import PROPERTY_PATTERNS, add_dynamic_property
+from html.parser import HTMLParser
+
+
+class TableParser(HTMLParser):
+    """HTML 테이블 파싱 클래스"""
+    def __init__(self):
+        super().__init__()
+        self.tables = []
+        self.current_table = []
+        self.current_row = []
+        self.current_cell = []
+        self.in_table = False
+        self.in_row = False
+        self.in_cell = False
+        self.cell_attrs = {}
+
+    def handle_starttag(self, tag, attrs):
+        attrs_dict = dict(attrs)
+        if tag == 'table':
+            self.in_table = True
+            self.current_table = []
+        elif tag == 'tr' and self.in_table:
+            self.in_row = True
+            self.current_row = []
+        elif tag in ['td', 'th'] and self.in_row:
+            self.in_cell = True
+            self.current_cell = []
+            self.cell_attrs = attrs_dict
+
+    def handle_endtag(self, tag):
+        if tag == 'table':
+            self.tables.append(self.current_table)
+            self.in_table = False
+        elif tag == 'tr':
+            if self.current_row:
+                self.current_table.append(self.current_row)
+            self.in_row = False
+        elif tag in ['td', 'th']:
+            cell_text = ''.join(self.current_cell).strip()
+            colspan = int(self.cell_attrs.get('colspan', 1))
+            self.current_row.append({
+                'text': cell_text,
+                'colspan': colspan,
+                'tag': tag
+            })
+            self.in_cell = False
+
+    def handle_data(self, data):
+        if self.in_cell:
+            self.current_cell.append(data)
+
+
+def extract_from_table(table_html: str) -> List[Dict]:
+    """
+    HTML 테이블에서 물성 추출 (colspan 처리 개선)
+
+    Args:
+        table_html: HTML 테이블 문자열
+
+    Returns:
+        추출된 물성 정보 리스트
+    """
+    parser = TableParser()
+    parser.feed(table_html)
+
+    extracted = []
+
+    for table in parser.tables:
+        if len(table) < 2:
+            continue
+
+        # colspan을 고려해서 행을 확장
+        def expand_row(row):
+            """colspan을 고려해서 셀을 복제"""
+            expanded = []
+            for cell in row:
+                expanded.append(cell)
+                # colspan > 1이면 빈 셀 추가
+                for _ in range(cell['colspan'] - 1):
+                    expanded.append({'text': '', 'colspan': 1, 'tag': cell['tag'], 'merged': True})
+            return expanded
+
+        # 모든 행 확장
+        expanded_table = [expand_row(row) for row in table]
+
+        # 헤더 행과 데이터 행 분리
+        header_rows = []
+        data_rows = []
+
+        for row in expanded_table:
+            th_count = sum(1 for cell in row if cell['tag'] == 'th' and cell['text'])
+            if th_count > 0:  # th가 하나라도 있으면 헤더
+                header_rows.append(row)
+            else:
+                data_rows.append(row)
+
+        if not header_rows or not data_rows:
+            continue
+
+        # 최대 컬럼 수 계산
+        max_cols = max(len(row) for row in expanded_table)
+
+        # 각 컬럼의 정보 수집 (이름 + 단위)
+        column_info = []
+        for col_idx in range(max_cols):
+            col_names = []
+            col_units = []
+
+            for header_row in header_rows:
+                if col_idx < len(header_row):
+                    cell = header_row[col_idx]
+                    text = cell['text'].strip()
+
+                    if not text or cell.get('merged'):
+                        continue
+
+                    # 단위 패턴 확인
+                    unit_patterns = ['℃', '°C', 'mm', 'μm', '㎜', 'Kg/25mm', 'kg/25mm', 'N/25mm', 'MPa', 'GPa']
+                    is_unit = any(unit in text for unit in unit_patterns)
+
+                    if is_unit:
+                        col_units.append(text)
+                    else:
+                        col_names.append(text)
+
+            column_info.append({
+                'names': col_names,
+                'units': col_units
+            })
+
+        # 데이터 행에서 물성 추출
+        for data_row in data_rows:
+            for col_idx, cell in enumerate(data_row):
+                if col_idx >= len(column_info):
+                    continue
+
+                col = column_info[col_idx]
+                value_text = cell['text'].strip()
+
+                # 숫자 값 파싱
+                value_match = re.search(r'(\d+\.?\d*)', value_text)
+                if not value_match:
+                    continue
+
+                value = float(value_match.group(1))
+
+                # 물성명 매칭
+                for property_key, prop_info in PROPERTY_PATTERNS.items():
+                    for prop_name in prop_info['names']:
+                        # 컬럼명과 물성명 매칭
+                        if any(prop_name in col_name for col_name in col['names']):
+                            # 단위 확인
+                            unit = col['units'][0] if col['units'] else ''
+
+                            extracted.append({
+                                'property': property_key,
+                                'value': value,
+                                'unit': unit,
+                                'matched_name': prop_name,
+                                'pattern': 'table'
+                            })
+                            break
+
+    return extracted
 
 
 def extract_property_from_text(text: str, property_key: str) -> Optional[Dict]:
@@ -98,11 +262,22 @@ def detect_all_properties(markdown_text: str) -> List[Dict]:
     """
     detected_properties = []
 
-    # 사전에 등록된 모든 물성 검색
+    # 1. HTML 테이블에서 추출
+    table_pattern = r'<table>.*?</table>'
+    table_matches = re.findall(table_pattern, markdown_text, re.DOTALL | re.IGNORECASE)
+
+    for table_html in table_matches:
+        table_props = extract_from_table(table_html)
+        detected_properties.extend(table_props)
+
+    # 2. 일반 텍스트에서 추출 (테이블에서 이미 추출된 물성 제외)
+    extracted_keys = set(p['property'] for p in detected_properties)
+
     for property_key in PROPERTY_PATTERNS.keys():
-        result = extract_property_from_text(markdown_text, property_key)
-        if result:
-            detected_properties.append(result)
+        if property_key not in extracted_keys:
+            result = extract_property_from_text(markdown_text, property_key)
+            if result:
+                detected_properties.append(result)
 
     return detected_properties
 
