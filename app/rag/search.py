@@ -59,7 +59,6 @@ class Search:
         키워드 검색 수행
         """
         elasticsearch_indexer = ElasticsearchIndexer()
-        elasticsearch_indexer.ensure_index(collections)
         return elasticsearch_indexer.keyword_search(query, collections)
 
     def _vector_search(self, query: str, collections: list[str]):
@@ -141,14 +140,23 @@ class Search:
        for entry in chunks:
            doc_id = entry.get("documentId", "")
            file_name = entry.get("file_name", "")
-           page_nums = entry.get("page_nums") or [0]
-           
+           page_nums = entry.get("page_nums")
+
+           # page_nums를 항상 리스트로 변환
+           if page_nums is None:
+               page_nums = [0]
+           elif isinstance(page_nums, int):
+               page_nums = [page_nums]
+           elif not isinstance(page_nums, list):
+               page_nums = [0]
+
            if not doc_id:
                # documentId가 없으면 viewer URL을 만들 수 없어 건너뜁니다.
                # (이 경우에도 snippet/text는 ranking에는 사용됩니다.)
                url = None
            else:
-               url = f"/{doc_id}/view"
+               # 백엔드 API 전체 경로로 PDF 뷰어 URL 생성
+               url = f"http://localhost:8000/collections/{doc_id}/view"
 
            group = grouped.setdefault(doc_id, {
                "title": file_name,
@@ -156,7 +164,7 @@ class Search:
                "url": url,
                "chunks": []
            })
-           
+
            group["chunks"].append({
                "pageRange": {"start": page_nums[0], "end": page_nums[-1]},
                "snippet": entry.get("snippet", ""),
@@ -213,15 +221,26 @@ class Search:
             print(f"   ❌ 그래프 검색 실패: {e}")
             raise
 
-        keyword_results = json.dumps(keyword_chunks, ensure_ascii=False, indent=2)
-        vector_results = json.dumps(vector_chunks, ensure_ascii=False, indent=2)
-        graph_results = json.dumps(graph_chunks, ensure_ascii=False, indent=2)
+        try:
+            keyword_results = json.dumps(keyword_chunks, ensure_ascii=False, indent=2)
+            vector_results = json.dumps(vector_chunks, ensure_ascii=False, indent=2)
+            graph_results = json.dumps(graph_chunks, ensure_ascii=False, indent=2)
+            print(f"✅ [RAG] JSON 직렬화 완료")
+        except Exception as e:
+            print(f"❌ [RAG] JSON 직렬화 실패: {e}")
+            raise
 
         ranked_chunks = keyword_chunks + vector_chunks + graph_chunks
         print(f"📦 [RAG] 전체 청크 통합: {len(ranked_chunks)}개 (키워드: {len(keyword_chunks)}, 벡터: {len(vector_chunks)}, 그래프: {len(graph_chunks)})")
-        
-        sources = self.extract_sources(ranked_chunks)
-        print(f"📚 [RAG] Sources 추출 완료: {len(sources)}개 문서\n")
+
+        try:
+            sources = self.extract_sources(ranked_chunks)
+            print(f"📚 [RAG] Sources 추출 완료: {len(sources)}개 문서\n")
+        except Exception as e:
+            print(f"❌ [RAG] Sources 추출 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
         prompt = f"""
         당신은 삼성전자 생산기술연구소의 소재 물성 문서 기반으로 근거 중심의 정확한 답변을 생성하는 전문 어시스턴트입니다.

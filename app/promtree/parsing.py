@@ -99,21 +99,18 @@ def parse_pdf(pdf_file: Path, converter: DocumentConverter, image_processor: met
                     try:
                         image_metadata_text = image_processor.extract(base64_image)
                         print(f"✅ VLLM 메타데이터 추출 완료: {image_metadata_text[:100]}...")
+                        # 마크다운 이미지 문법 형식으로 변환하여 chunking 가능하도록 함
+                        image_markdown = f"![{image_metadata_text}]()"
+                        contents.append(image_markdown)
+                        print(f"✅ 이미지 마크다운 추가 완료")
                     except Exception as vllm_error:
-                        # VLLM 에러 시 명확한 에러 메시지 출력
-                        error_msg = f"❌ VLLM 이미지 처리 실패 (파일: {pdf_file.name}, 페이지: {current_page}): {vllm_error}"
+                        # VLLM 에러 시 경고만 출력하고 계속 진행 (이미지 건너뜀)
+                        error_msg = f"⚠️ VLLM 이미지 처리 실패 (파일: {pdf_file.name}, 페이지: {current_page}): {vllm_error}"
                         print(error_msg)
-                        raise RuntimeError(error_msg) from vllm_error
-
-                    # 마크다운 이미지 문법 형식으로 변환하여 chunking 가능하도록 함
-                    image_markdown = f"![{image_metadata_text}]()"
-                    contents.append(image_markdown)
-                    print(f"✅ 이미지 마크다운 추가 완료")
-            except RuntimeError:
-                # VLLM 에러는 이미 위에서 처리했으므로 재발생
-                raise
+                        print("⏩ 이미지를 건너뛰고 계속 진행합니다...")
             except Exception as e:
-                print(f"Warning: Could not process image in {pdf_file.name}: {e}")
+                # 다른 예외는 로그만 출력하고 계속
+                print(f"⚠️ 이미지 처리 중 예외 발생: {e}")
 
     return contents
 

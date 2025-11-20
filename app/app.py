@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from starlette import status
 from contextlib import asynccontextmanager
 from app.routers.users import user_router
@@ -20,6 +21,15 @@ app = FastAPI(
     summary="물성 전용 RAG",
     version="0.0.1",
     lifespan=lifespan
+)
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/", status_code=status.HTTP_200_OK)

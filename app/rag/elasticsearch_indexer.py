@@ -32,6 +32,7 @@ class ElasticsearchIndexer:
 
     def ensure_index(self, index_name: str) -> None:
         """Elasticsearch 인덱스가 없으면 생성하는 함수 (한/영 분석기, 동의어 설정 포함)"""
+        index_name = index_name.lower()  # Elasticsearch 인덱스 이름은 소문자만 허용
         es = self.elasticsearch_client
         if es.indices.exists(index=index_name):
             return
@@ -139,6 +140,7 @@ class ElasticsearchIndexer:
 
     def reload_search_analyzers(self, index_name: str) -> Dict[str, Any]:
         """동의어 파일 변경 시 검색 분석기를 핫 리로드하는 함수"""
+        index_name = index_name.lower()
         return self.elasticsearch_client.indices.reload_search_analyzers(index=index_name)
 
     def _normalize_source(self, doc: Dict[str, Any], include_extended_fields: bool = False) -> Dict[str, Any]:
@@ -181,6 +183,7 @@ class ElasticsearchIndexer:
     # --------------------------
     def index_file(self, file_name: str, index_name: str) -> bool:
         """MongoDB에서 특정 파일의 청크 데이터를 Elasticsearch에 색인하는 함수"""
+        index_name = index_name.lower()
         self.ensure_index(index_name)
 
         cursor = self.chunk_collection.find({"file_info.file_name": file_name})
@@ -231,11 +234,13 @@ class ElasticsearchIndexer:
     def index_chunks(self, chunks: List[Dict[str, Any]], collections: List[str]) -> bool:
         """
         청크 리스트를 여러 Elasticsearch 인덱스에 동시 색인.
-        
+
         Args:
             chunks (list[dict]): 저장할 청크 리스트
             collections (list[str]): 사용자가 선택한 collection 리스트
         """
+        # 컬렉션 이름을 소문자로 변환
+        collections = [c.lower() for c in collections]
 
         if not chunks:
             print("⚠️ No chunks provided to index.")
@@ -295,6 +300,9 @@ class ElasticsearchIndexer:
     # --------------------------
     def keyword_search(self, query: str, index_names: List[str]) -> List[Dict[str, Any]]:
         """한/영 동의어, 오타 허용, 하이라이트를 적용한 키워드 검색 함수"""
+        # 인덱스 이름을 소문자로 변환
+        index_names = [idx.lower() for idx in index_names]
+
         RETURN_SIZE = 10
         fuzz = 1 if len(query) <= 3 else "AUTO"
 
