@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from typing import Sequence
+import os
 
 import httpx
+from openai import AsyncOpenAI
+from dotenv import load_dotenv
 
-chat_ai_url = "https://bcb7tjvf0wm6jb-11434.proxy.runpod.net"
+load_dotenv()
 
 
 class ChatAIServiceError(RuntimeError):
@@ -15,59 +18,68 @@ class ChatAIServiceError(RuntimeError):
 async def request_chat_ai(
     question: str,
     history: Sequence[dict[str, str]] | None = None,
-) -> tuple[str, list[str]]:
+) -> str:
     """
     외부 챗봇 API에 질문을 전달하고 응답을 받아옵니다.
+    RAG 검색 없이 대화 기록만으로 답변을 생성합니다.
 
     Args:
         question: 사용자 질문
         history: 직전 대화 기록 (role, contents)
 
     Returns:
-        (answer, sources)
+        answer: 챗봇 응답 문자열
     """
+    upstage_key = os.getenv("UPSTAGE_API_KEY")
+    if not upstage_key:
+        raise ChatAIServiceError("UPSTAGE_API_KEY가 설정되지 않았습니다.")
 
-    messages = [
-        {"role": item["role"], "content": item["contents"]}
-        for item in history or []
-    ]
+    # 이전 대화 맥락을 messages 형식으로 변환
+    messages = []
+    
+    if history:
+        for msg in history:
+            role = msg.get("role", "user")
+            contents = msg.get("contents", "")
+            # role이 "chatbot"이면 "assistant"로 변환
+            if role == "chatbot":
+                role = "assistant"
+            elif role not in ["user", "assistant", "system"]:
+                role = "user"
+            messages.append({
+                "role": role,
+                "content": contents
+            })
+    
+    # 현재 질문 추가
     messages.append({"role": "user", "content": question})
 
-    payload = {
-        "model": "gpt-oss:20b",
-        "messages": messages,
-        "stream": False,
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(f"{chat_ai_url}/api/chat", json=payload)
-            response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise ChatAIServiceError("챗봇 서비스 호출에 실패했습니다.") from exc
-
-    try:
-        data = response.json()
-    except ValueError as exc:
-        raise ChatAIServiceError("챗봇 응답을 파싱할 수 없습니다.") from exc
-
-    message = data.get("message") or {}
-    answer = (
-        message.get("content")
-        or data.get("answer")
-        or data.get("response")
-        or data.get("message")
-    )
-
-    if isinstance(answer, dict):
-        answer = answer.get("content")
-
-    if not isinstance(answer, str) or not answer.strip():
-        raise ChatAIServiceError("챗봇 서비스가 유효한 답변을 반환하지 않았습니다.")
-
-    sources_raw = data.get("sources") or message.get("sources") or []
-    if not isinstance(sources_raw, list):
-        sources_raw = []
-    sources = [str(source) for source in sources_raw]
-
-    return answer, sources
+        # Upstage API 클라이언트 초기화
+        client = AsyncOpenAI(
+            api_key=upstage_key,
+            base_url="https://api.upstage.ai/v1",
+            http_client=httpx.AsyncClient(timeout=30)
+        )
+        
+        # 답변 요청
+        response = await client.chat.completions.create(
+            model="solar-pro",
+            messages=messages,
+            temperature=0.7,
+            stream=False
+        )
+        
+        answer = response.choices[0].message.content
+        
+        if not isinstance(answer, str) or not answer.strip():
+            raise ChatAIServiceError("챗봇 서비스가 유효한 답변을 반환하지 않았습니다.")
+        
+        # 응답 맨 처음에 안내 메시지 추가
+        notice_message = "해당 응답은 지식 베이스 속 문서 검색 기반의 응답이 아닌 llm 자체의 응답입니다. rag 검색 기능을 켜주십시오.\n\n"
+        answer = notice_message + answer
+        
+        return answer
+        
+    except Exception as exc:
+        raise ChatAIServiceError(f"챗봇 서비스 호출에 실패했습니다: {str(exc)}") from exc

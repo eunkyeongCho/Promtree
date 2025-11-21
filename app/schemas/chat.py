@@ -16,6 +16,7 @@ class ChatRenameRequest(BaseModel):
 
 class MessageCreateRequest(BaseModel):
     contents: str = Field(..., min_length=1)
+    collection_names: list[str] | None = Field(default=None)
 
 
 class ChatSummaryResponse(BaseModel):
@@ -25,13 +26,26 @@ class ChatSummaryResponse(BaseModel):
     updated_at: datetime
 
 
+class SourceChunk(BaseModel):
+    pageRange: dict[str, int]
+    snippet: str
+    text: str
+
+
+class Source(BaseModel):
+    title: str
+    documentId: str
+    url: str
+    chunks: list[SourceChunk]
+
+
 class MessageResponse(BaseModel):
     message_id: str
     chat_id: str
     role: Literal["user", "chatbot"]
     contents: str
     timestamp: datetime
-    sources: list[str]
+    sources: list[Source]
 
 
 class ChatHistoryResponse(BaseModel):

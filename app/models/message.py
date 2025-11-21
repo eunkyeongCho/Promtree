@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
+from typing import Any
+
 from beanie import Document
 from pydantic import Field
 
@@ -18,7 +20,7 @@ class Message(Document):
     role: Literal["user", "chatbot"]
     contents: str
     timestamp: datetime = Field(default_factory=_utcnow)
-    sources: list[str] = Field(default_factory=list)
+    sources: list[dict[str, Any]] = Field(default_factory=list)
 
     class Settings:
         name = "messages"
@@ -26,4 +28,3 @@ class Message(Document):
             "message_id",
             "chat_id",
         ]
-

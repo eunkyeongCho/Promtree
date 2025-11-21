@@ -15,7 +15,7 @@ def converter_init() -> DocumentConverter:
     DocumentConverter 초기화 함수
     
     PDF 파이프라인의 input format을 PDF로 설정하고,
-    이미지 생성을 비활성화하며, 이미지 스케일을 2.0으로 설정합니다.
+    이미지 생성을 활성화하며, 이미지 스케일을 2.0으로 설정합니다.
 
     Args:
         None
@@ -23,7 +23,7 @@ def converter_init() -> DocumentConverter:
         DocumentConverter: 초기화된 DocumentConverter 객체
     """
     pipeline_options = PdfPipelineOptions()
-    pipeline_options.generate_picture_images = False
+    pipeline_options.generate_picture_images = True
     pipeline_options.images_scale = 2.0
     converter = DocumentConverter(
         format_options={
@@ -48,6 +48,7 @@ def parse_pdf(pdf_file: Path, converter: DocumentConverter, image_processor: met
     Returns:
         List[str]: 파싱된 콘텐츠 리스트(텍스트=마크다운, 이미지=base64 인코딩, 표=HTML)
     """
+    print(f"🔄 PDF 파일 파싱 시작 (파일: {pdf_file.name})")
     result = converter.convert(pdf_file)
     doc = result.document
 
@@ -79,7 +80,12 @@ def parse_pdf(pdf_file: Path, converter: DocumentConverter, image_processor: met
         elif isinstance(item, PictureItem):
             # 이미지 처리 - base64로 인코딩
             try:
-                if item.image and item.image.pil_image:
+                if not item.image:
+                    print(f"⚠️ 이미지 객체가 없습니다 (파일: {pdf_file.name}, 페이지: {current_page})")
+                elif not item.image.pil_image:
+                    print(f"⚠️ PIL 이미지가 없습니다 (파일: {pdf_file.name}, 페이지: {current_page})")
+                    print(f"   generate_picture_images=False 설정으로 인해 이미지가 생성되지 않았을 수 있습니다.")
+                else:
                     # PIL Image를 바이트로 변환
                     img_buffer = BytesIO()
                     item.image.pil_image.save(img_buffer, format="PNG")
@@ -88,11 +94,23 @@ def parse_pdf(pdf_file: Path, converter: DocumentConverter, image_processor: met
                     # base64 인코딩
                     base64_image = base64.b64encode(img_bytes).decode('utf-8')
 
-                    image_markdown = image_processor.extract(base64_image)
-
-                    contents.append(image_markdown)
+                    # VLLM으로부터 이미지 메타데이터 추출
+                    print(f"🔄 VLLM 이미지 메타데이터 추출 중...")
+                    try:
+                        image_metadata_text = image_processor.extract(base64_image)
+                        print(f"✅ VLLM 메타데이터 추출 완료: {image_metadata_text[:100]}...")
+                        # 마크다운 이미지 문법 형식으로 변환하여 chunking 가능하도록 함
+                        image_markdown = f"![{image_metadata_text}]()"
+                        contents.append(image_markdown)
+                        print(f"✅ 이미지 마크다운 추가 완료")
+                    except Exception as vllm_error:
+                        # VLLM 에러 시 경고만 출력하고 계속 진행 (이미지 건너뜀)
+                        error_msg = f"⚠️ VLLM 이미지 처리 실패 (파일: {pdf_file.name}, 페이지: {current_page}): {vllm_error}"
+                        print(error_msg)
+                        print("⏩ 이미지를 건너뛰고 계속 진행합니다...")
             except Exception as e:
-                print(f"Warning: Could not process image in {pdf_file.name}: {e}")
+                # 다른 예외는 로그만 출력하고 계속
+                print(f"⚠️ 이미지 처리 중 예외 발생: {e}")
 
     return contents
 

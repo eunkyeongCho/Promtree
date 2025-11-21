@@ -14,6 +14,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 
 from app.models.collection import CollectionDocument, KnowledgeCollection
 from app.schemas.collection import (
@@ -28,6 +29,7 @@ from app.services.collection import (
     get_collection_dir,
     rename_collection_dir,
     save_pdf_file,
+    view_document_file,
 )
 from app.services.pdf_preprocessing import PDFPreprocessing
 from app.utils.auth import get_current_user_email
@@ -122,6 +124,7 @@ async def help():
             "GET /collections/{collection_id} - 문서 목록",
             "POST /collections/{collection_id} - 문서 업로드",
             "DELETE /collections/{collection_id}/{document_id} - 문서 삭제",
+            "GET /{document_id}/view - PDF 문서 보기",
         ]
     }
 
@@ -385,3 +388,37 @@ async def document_delete(
 
     delete_document_file(collection.name, document.filename)
     await document.delete()
+
+
+@collection_router.get(
+    "/{document_id}/view",
+    response_class=FileResponse,
+    summary="PDF 문서 보기",
+)
+async def document_view(
+    document_id: str,
+    from_page: int | None = Query(
+        None,
+        alias="from",
+        ge=0,
+        description="Start page (0-indexed). Client-side PDF viewer에서 처리합니다.",
+    ),
+    to_page: int | None = Query(
+        None,
+        alias="end",
+        ge=0,
+        description="End page (0-indexed). Client-side PDF viewer에서 처리합니다.",
+    ),
+):
+    """
+    저장된 PDF 문서를 반환합니다.
+
+    `from`/`end` 파라미터는 현재 서버에서는 사용하지 않으며,
+    향후 서버 측 페이지 분할 기능을 위해 예약되어 있습니다.
+    """
+
+    return await view_document_file(
+        document_id=document_id,
+        from_page=from_page,
+        to_page=to_page,
+    )

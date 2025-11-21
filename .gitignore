@@ -184,7 +184,32 @@ $RECYCLE.BIN/
 
 ### Claude Code ###
 .claude/
-CLAUDE.md
 
 ### Qdrant Storage ###
 common/qdrant_storage/
+
+### Logs and Process Files ###
+*.log
+*.pid
+
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+### Backup Files ###
+*.zip
+*.bak
+*.backup
+
+### Test/Debug Scripts ###
+check_*.py
+delete_*.py
+test_*.py
+markdown_sample_data/
+
+### Frontend ###
+frontend/node_modules/
+frontend/dist/
+frontend/*.log
+frontend/*.pid

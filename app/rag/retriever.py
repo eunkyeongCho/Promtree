@@ -5,6 +5,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 import os
+import numpy as np
 
 def init():
     """
@@ -47,12 +48,12 @@ def search_similar_chunks(client: QdrantClient, qv, collections: list[str], top_
 
     raw_results = []
     for collection in collections: # 각 컬렉션에 대해 검색
-        raw_result = client.search(
+        raw_result = client.query_points(
             collection_name=collection,
-            query_vector=qv,
+            query=qv.tolist() if hasattr(qv, 'tolist') else qv,
             limit=top_k
         )
-        raw_results.extend(raw_result)
+        raw_results.extend(raw_result.points)
 
     # 전체 결과 score 기준 정렬 (내림차순)
     raw_results.sort(key=lambda x: x.score, reverse=True)
