@@ -3,6 +3,9 @@ demo/images/
 demo/storage/
 parsing/pdfs
 
+### pdf ###
+/pdfs
+
 
 ### dotenv ###
 .env
@@ -181,7 +184,32 @@ $RECYCLE.BIN/
 
 ### Claude Code ###
 .claude/
-CLAUDE.md
 
-### 나중에 따로 MR 올리기 위해 잠시 git ignore 처리
-/retriever/rag_retrieval_pipeline.ipynb
+### Qdrant Storage ###
+common/qdrant_storage/
+
+### Logs and Process Files ###
+*.log
+*.pid
+
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+### Backup Files ###
+*.zip
+*.bak
+*.backup
+
+### Test/Debug Scripts ###
+check_*.py
+delete_*.py
+test_*.py
+markdown_sample_data/
+
+### Frontend ###
+frontend/node_modules/
+frontend/dist/
+frontend/*.log
+frontend/*.pid
