@@ -1,1 +1,0 @@
-from .elasticsearch import get_elasticsearch_client

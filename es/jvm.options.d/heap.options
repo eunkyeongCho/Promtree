@@ -1,5 +1,0 @@
-# Set Elasticsearch JVM Heap (per node)
-# Keep Xms(min) and Xmx(max) equal to avoid runtime heap resizing
-# 1536m(=1.5GB) is recommended per node
--Xms1536m
--Xmx1536m
